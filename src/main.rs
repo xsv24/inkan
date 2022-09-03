@@ -1,36 +1,24 @@
+pub mod args;
+pub mod branch;
 pub mod cli;
 pub mod template;
 
-use anyhow::Context;
+use branch::Branch;
 use clap::Parser;
-use std::fs;
+use rusqlite::Connection;
 use std::{os::unix::process::CommandExt, process::Command};
 
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();
+    let conn = Connection::open("db")?;
 
     match args.command {
         cli::Command::Commit(template) => {
             let args = template.args();
-            println!("{:?}", args);
+            let template = template.read_file()?;
+            let contents = args.commit_message(template, &conn)?;
 
-            let template = format!("templates/commit/{}", template.file_name());
-
-            let contents: String = fs::read_to_string(&template)
-                .with_context(|| format!("Failed to read template '{}'", template))?
-                .parse()?;
-
-            let contents = match &args.ticket {
-                Some(num) => contents.replace("{ticket_num}", &format!("[{}]", num)),
-                None => contents.replace("{ticket_num}", ""),
-            };
-
-            let contents = match &args.message {
-                Some(message) => contents.replace("{message}", &message),
-                None => contents.replace("{message}", ""),
-            };
-
-            println!("contents: {}", contents);
+            dbg!("contents: {}", &contents);
 
             let _ = Command::new("git")
                 .arg("commit")
@@ -39,8 +27,27 @@ fn main() -> anyhow::Result<()> {
                 .arg("-e")
                 .exec();
         }
-        cli::Command::Pr(template) => {
-            let template = format!("templates/pr/{}", template.file_name());
+        cli::Command::Checkout { name, ticket } => {
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS branch (
+                    name TEXT NOT NULL PRIMARY KEY,
+                    ticket TEXT,
+                    data BLOB,
+                    created TEXT NOT NULL
+                )",
+                (),
+            )?;
+
+            // We want to store the branch name against and ticket number
+            // So whenever we commit we get the ticket number from the branch
+            let branch = Branch::new(&name, ticket)?;
+            branch.insert_into_db(&conn)?;
+
+            let _ = Command::new("git")
+                .arg("checkout")
+                .arg("-b")
+                .arg(name)
+                .exec();
         }
     };
 

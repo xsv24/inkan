@@ -1,4 +1,8 @@
-use clap::{Args, Subcommand};
+use anyhow::Context;
+use clap::Subcommand;
+use std::fs;
+
+use crate::args::Arguments;
 
 #[derive(Debug, Subcommand)]
 pub enum Template {
@@ -9,15 +13,6 @@ pub enum Template {
     Feature(Arguments),
     Refactor(Arguments),
     Test(Arguments),
-}
-
-#[derive(Debug, Args)]
-pub struct Arguments {
-    #[clap(short, long, value_parser)]
-    pub ticket: Option<String>,
-
-    #[clap(short, long, value_parser)]
-    pub message: Option<String>,
 }
 
 impl Template {
@@ -43,5 +38,15 @@ impl Template {
             Template::Docs(args) => args,
             Template::Test(args) => args,
         }
+    }
+
+    pub fn read_file(&self) -> anyhow::Result<String> {
+        let template = format!("templates/commit/{}", self.file_name());
+
+        let contents: String = fs::read_to_string(&template)
+            .with_context(|| format!("Failed to read template '{}'", template))?
+            .parse()?;
+
+        Ok(contents)
     }
 }
