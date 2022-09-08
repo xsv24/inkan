@@ -1,5 +1,6 @@
 use anyhow::Context;
 use clap::Subcommand;
+use directories::ProjectDirs;
 use std::fs;
 
 use crate::args::Arguments;
@@ -41,10 +42,15 @@ impl Template {
     }
 
     pub fn read_file(&self) -> anyhow::Result<String> {
-        let template = format!("templates/commit/{}", self.file_name());
+        let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
+            .context("Failed to retrieve 'git-kit' config")?;
+
+        let file_name = self.file_name();
+        let sub_dir = format!("templates/commit/{}", file_name);
+        let template = project_dir.config_dir().join(sub_dir);
 
         let contents: String = fs::read_to_string(&template)
-            .with_context(|| format!("Failed to read template '{}'", template))?
+            .with_context(|| format!("Failed to read template '{}'", file_name))?
             .parse()?;
 
         Ok(contents)
