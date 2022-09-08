@@ -21,7 +21,7 @@ impl Branch {
         })
     }
 
-    pub fn insert_into_db(&self, conn: &Connection) -> anyhow::Result<()> {
+    pub fn insert_or_update(&self, conn: &Connection) -> anyhow::Result<()> {
         conn.execute(
             "REPLACE INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
             (

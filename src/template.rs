@@ -41,10 +41,7 @@ impl Template {
         }
     }
 
-    pub fn read_file(&self) -> anyhow::Result<String> {
-        let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
-            .context("Failed to retrieve 'git-kit' config")?;
-
+    pub fn read_file(&self, project_dir: &ProjectDirs) -> anyhow::Result<String> {
         let file_name = self.file_name();
         let sub_dir = format!("templates/commit/{}", file_name);
         let template = project_dir.config_dir().join(sub_dir);

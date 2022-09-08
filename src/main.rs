@@ -3,7 +3,7 @@ pub mod branch;
 pub mod cli;
 pub mod template;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use branch::Branch;
 use clap::Parser;
 use directories::ProjectDirs;
@@ -32,32 +32,33 @@ fn main() -> anyhow::Result<()> {
     match args.command {
         cli::Command::Commit(template) => {
             let args = template.args();
-            let template = template.read_file()?;
+            let template = template.read_file(&project_dir)?;
             let contents = args.commit_message(template, &conn)?;
 
             let _ = Command::new("git")
-                .arg("commit")
-                .arg("-m")
-                .arg(contents)
-                .arg("-e")
+                .args(["commit", "-m", &contents, "-e"])
                 .status()?;
         }
         cli::Command::Checkout { name, ticket } => {
             // We want to store the branch name against and ticket number
             // So whenever we commit we get the ticket number from the branch
             let branch = Branch::new(&name, ticket)?;
-            branch.insert_into_db(&conn)?;
+            branch.insert_or_update(&conn)?;
 
-            let _ = Command::new("git")
-                .arg("checkout")
-                .arg("-b")
-                .arg(name)
-                .status()?;
+            // Attempt to create branch
+            let create = Command::new("git")
+                .args(["checkout", "-b", &name])
+                .output()?;
+
+            // If the branch exists check it out
+            if !create.status.success() {
+                Command::new("git").args(["checkout", &name]).status()?;
+            }
         }
     };
 
     conn.close()
-        .map_err(|_| anyhow::anyhow!("Failed to close 'git-kit' connection"))?;
+        .map_err(|_| anyhow!("Failed to close 'git-kit' connection"))?;
 
     Ok(())
 }
