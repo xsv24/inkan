@@ -1,7 +1,9 @@
 pub mod args;
 pub mod branch;
 pub mod cli;
+pub mod git_commands;
 pub mod template;
+pub mod try_convert;
 
 use anyhow::{anyhow, Context};
 use branch::Branch;
@@ -31,6 +33,7 @@ fn main() -> anyhow::Result<()> {
 
     match args.command {
         cli::Command::Commit(template) => {
+            // TODO: Move this into a separate function.
             let args = template.args();
             let template = template.read_file(&project_dir)?;
             let contents = args.commit_message(template, &conn)?;
@@ -40,6 +43,7 @@ fn main() -> anyhow::Result<()> {
                 .status()?;
         }
         cli::Command::Checkout { name, ticket } => {
+            // TODO: Move this into a separate function.
             // We want to store the branch name against and ticket number
             // So whenever we commit we get the ticket number from the branch
             let branch = Branch::new(&name, ticket)?;

@@ -1,9 +1,10 @@
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use rusqlite::{types::Type, Connection, Row};
-use std::process::Command;
 
-#[derive(Debug)]
+use crate::git_commands::get_repo_name;
+
+#[derive(Debug, Clone)]
 pub struct Branch {
     pub name: String,
     pub ticket: String,
@@ -76,31 +77,202 @@ impl<'a> TryFrom<&Row<'a>> for Branch {
     }
 }
 
-pub fn get_repo_name() -> anyhow::Result<String> {
-    let repo_dir: String = String::from_utf8_lossy(
-        &Command::new("git")
-            .args(["rev-parse", "--show-toplevel"])
-            .output()?
-            .stdout,
-    )
-    .into();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let repo = repo_dir
-        .split("/")
-        .last()
-        .context("Failed to get repository name")?;
+    use anyhow::Context;
+    use chrono::Utc;
+    use fake::{Fake, Faker};
+    use rusqlite::Connection;
+    use std::collections::HashMap;
 
-    Ok(repo.trim().into())
-}
+    #[test]
+    fn creating_branch_with_ticket_populates_correctly() -> anyhow::Result<()> {
+        // Arrange
+        let now = Utc::now();
+        let name: String = Faker.fake();
+        let ticket: String = Faker.fake();
 
-pub fn get_branch_name() -> anyhow::Result<String> {
-    let branch: String = String::from_utf8_lossy(
-        &Command::new("git")
-            .args(["branch", "--show-current"])
-            .output()?
-            .stdout,
-    )
-    .into();
+        // Act
+        let branch = Branch::new(&name, Some(ticket.clone()))?;
 
-    Ok(branch.trim().into())
+        // Assert
+        assert_eq!(branch.name, format!("git-kit-{}", &name));
+        assert_eq!(branch.ticket, ticket);
+        assert!(branch.created > now);
+        assert_eq!(branch.data, None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn creating_branch_without_ticket_defaults_to_name() -> anyhow::Result<()> {
+        // Arrange
+        let now = Utc::now();
+        let name: String = Faker.fake();
+
+        // Act
+        let branch = Branch::new(&name, None)?;
+
+        // Assert
+        assert_eq!(branch.name, format!("git-kit-{}", &name));
+        assert_eq!(branch.ticket, name);
+        assert!(branch.created > now);
+        assert_eq!(branch.data, None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn insert_or_update_creates_a_new_item_if_not_exists() -> anyhow::Result<()> {
+        // Arrange
+        let branch = fake_branch(None)?;
+        let conn = setup_db()?;
+
+        // Act
+        branch.insert_or_update(&conn)?;
+
+        // Assert
+        assert_eq!(branch_count(&conn)?, 1);
+
+        let (name, ticket, data, created) = select_branch_row(&conn)?;
+
+        assert_eq!(branch.name, name);
+        assert_eq!(branch.ticket, ticket);
+        assert_eq!(branch.data, data);
+        assert_eq!(branch.created.to_rfc3339(), created);
+
+        Ok(())
+    }
+
+    #[test]
+    fn insert_or_update_updates_an_existing_item() -> anyhow::Result<()> {
+        // Arrange
+        let branch = fake_branch(None)?;
+        let conn = setup_db()?;
+
+        conn.execute(
+            "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+            (
+                &branch.name,
+                &branch.ticket,
+                &branch.data,
+                &branch.created.to_rfc3339(),
+            ),
+        )?;
+
+        let updated_branch = Branch {
+            name: branch.name,
+            ..fake_branch(None)?
+        };
+
+        // Act
+        updated_branch.insert_or_update(&conn)?;
+
+        // Assert
+        assert_eq!(branch_count(&conn)?, 1);
+
+        let (name, ticket, data, created) = select_branch_row(&conn)?;
+
+        assert_eq!(updated_branch.name, name);
+        assert_eq!(updated_branch.ticket, ticket);
+        assert_eq!(updated_branch.data, data);
+        assert_eq!(updated_branch.created.to_rfc3339(), created);
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_retrieves_correct_branch() -> anyhow::Result<()> {
+        // Arrange
+        let conn = setup_db()?;
+        let mut branches: HashMap<String, Branch> = HashMap::new();
+
+        // Insert random collection of branches.
+        for _ in 0..(2..10).fake() {
+            let name: String = Faker.fake();
+            let branch = fake_branch(Some(name.clone()))?;
+
+            branches.insert(name, branch.clone());
+
+            conn.execute(
+                "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+                (
+                    &branch.name,
+                    &branch.ticket,
+                    &branch.data,
+                    &branch.created.to_rfc3339(),
+                ),
+            )?;
+        }
+
+        let keys = branches.keys().cloned().collect::<Vec<String>>();
+
+        let random_key = keys
+            .get((0..keys.len() - 1).fake::<usize>())
+            .with_context(|| "Expected to find a matching branch")?;
+
+        let random_branch = branches
+            .get(random_key)
+            .with_context(|| "Expected to find a matching branch")?;
+
+        // Act
+        let branch = Branch::get(&random_key, &conn)?;
+
+        // Assert
+        assert_eq!(random_branch.name, branch.name);
+        assert_eq!(random_branch.ticket, branch.ticket);
+        assert_eq!(random_branch.data, branch.data);
+        assert_eq!(
+            random_branch.created.to_rfc3339(),
+            branch.created.to_rfc3339()
+        );
+
+        Ok(())
+    }
+
+    fn fake_branch(name: Option<String>) -> anyhow::Result<Branch> {
+        let name: String = name.unwrap_or(Faker.fake());
+        let ticket: Option<String> = Faker.fake();
+
+        Ok(Branch::new(&name, ticket)?)
+    }
+
+    fn select_branch_row(
+        conn: &Connection,
+    ) -> anyhow::Result<(String, String, Option<Vec<u8>>, String)> {
+        let (name, ticket, data, created) = conn.query_row("SELECT * FROM branch", [], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<Vec<u8>>>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+
+        Ok((name, ticket, data, created))
+    }
+
+    fn branch_count(conn: &Connection) -> anyhow::Result<i32> {
+        let count: i32 = conn.query_row("SELECT COUNT(*) FROM branch", [], |row| row.get(0))?;
+
+        Ok(count)
+    }
+
+    fn setup_db() -> anyhow::Result<Connection> {
+        let conn = Connection::open_in_memory()?;
+
+        conn.execute(
+            "CREATE TABLE branch (
+                name TEXT NOT NULL PRIMARY KEY,
+                ticket TEXT,
+                data BLOB,
+                created TEXT NOT NULL
+            )",
+            (),
+        )?;
+
+        Ok(conn)
+    }
 }
