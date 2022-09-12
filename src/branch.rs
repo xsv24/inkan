@@ -15,7 +15,7 @@ pub struct Branch {
 impl Branch {
     pub fn new(name: &str, ticket: Option<String>) -> anyhow::Result<Branch> {
         Ok(Branch {
-            name: format!("{}-{}", get_repo_name()?, name),
+            name: format!("{}-{}", get_repo_name()?, name.trim()),
             created: Utc::now(),
             ticket: ticket.unwrap_or(name.into()),
             data: None,
@@ -38,7 +38,7 @@ impl Branch {
     }
 
     pub fn get(branch: &str, conn: &Connection) -> anyhow::Result<Branch> {
-        let name = format!("{}-{}", get_repo_name()?, branch);
+        let name = format!("{}-{}", get_repo_name()?, branch.trim());
 
         let branch = conn.query_row(
             "SELECT name, ticket, data, created FROM branch where name = ?",
@@ -118,6 +118,25 @@ mod tests {
         // Assert
         assert_eq!(branch.name, format!("git-kit-{}", &name));
         assert_eq!(branch.ticket, name);
+        assert!(branch.created > now);
+        assert_eq!(branch.data, None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn branch_name_is_trimmed() -> anyhow::Result<()> {
+        // Arrange
+        let now = Utc::now();
+        let name: String = format!("{}\n", Faker.fake::<String>());
+        let ticket: String = Faker.fake();
+
+        // Act
+        let branch = Branch::new(&name, Some(ticket.clone()))?;
+
+        // Assert
+        assert_eq!(branch.name, format!("git-kit-{}", &name.trim()));
+        assert_eq!(branch.ticket, ticket);
         assert!(branch.created > now);
         assert_eq!(branch.data, None);
 
@@ -228,6 +247,34 @@ mod tests {
             random_branch.created.to_rfc3339(),
             branch.created.to_rfc3339()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_trims_name_before_retrieving() -> anyhow::Result<()> {
+        // Arrange
+        let conn = setup_db()?;
+
+        // Insert random collection of branches.
+        let name: String = Faker.fake();
+        let expected = fake_branch(Some(name.clone()))?;
+
+        conn.execute(
+            "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+            (
+                &expected.name,
+                &expected.ticket,
+                &expected.data,
+                &expected.created.to_rfc3339(),
+            ),
+        )?;
+
+        // Act
+        let actual = Branch::get(&format!(" {}\n", name), &conn)?;
+
+        // Assert
+        assert_eq!(actual.name, expected.name);
 
         Ok(())
     }

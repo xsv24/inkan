@@ -4,9 +4,11 @@ use rusqlite::Connection;
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
 pub struct Arguments {
+    /// Issue ticket number related to the commit.
     #[clap(short, long, value_parser)]
     pub ticket: Option<String>,
 
+    /// Message for the commit.
     #[clap(short, long, value_parser)]
     pub message: Option<String>,
 }

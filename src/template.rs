@@ -7,12 +7,19 @@ use crate::args::Arguments;
 
 #[derive(Debug, Subcommand)]
 pub enum Template {
+    /// Breaking change that could break a consuming application.
     Break(Arguments),
+    /// Fix that resolves an unintended issue.
     Bug(Arguments),
+    /// Dependency update or migration to a new dependency.
     Deps(Arguments),
+    /// Documentation change.
     Docs(Arguments),
+    /// Adds new functionality.
     Feature(Arguments),
+    /// Improvement of code / structure without adding new functionality.
     Refactor(Arguments),
+    /// Adds or improves the existing tests related to the code base.
     Test(Arguments),
 }
 
