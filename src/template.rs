@@ -1,9 +1,9 @@
-use anyhow::Context;
+use anyhow::Context as anyhow_context;
 use clap::Subcommand;
 use directories::ProjectDirs;
 use std::fs;
 
-use crate::args::Arguments;
+use crate::{args::Arguments, context::Context, git_commands::GitCommands};
 
 #[derive(Debug, Subcommand)]
 pub enum Template {
@@ -59,15 +59,27 @@ impl Template {
 
         Ok(contents)
     }
+
+    pub fn commit<C: GitCommands>(&self, context: &Context<C>) -> anyhow::Result<String> {
+        let args = self.args();
+        let template = self.read_file(&context.project_dir)?;
+        let contents = args.commit_message(template, &context)?;
+
+        Ok(contents)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use fake::{Fake, Faker};
+    use rusqlite::Connection;
     use std::{
         env,
         path::{Path, PathBuf},
     };
+    use uuid::Uuid;
+
+    use crate::{branch::Branch, git_commands::Git};
 
     use super::*;
 
@@ -115,14 +127,7 @@ mod tests {
 
     #[test]
     fn read_file() -> anyhow::Result<()> {
-        let dirs = ProjectDirs::from("test", "xsv24", "git-kit")
-            .context("Failed to retrieve 'git-kit' config")?;
-
-        // https://doc.rust-lang.org/cargo/reference/environment-variables.html
-        let project_root = &env::var("CARGO_MANIFEST_DIR").unwrap();
-        let templates_path = &dirs.config_dir().join("templates/");
-
-        copy_or_replace(&Path::new(project_root).join("templates/"), templates_path)?;
+        let (dirs, templates_path) = fake_project_dir()?;
 
         let expected_templates = [
             Template::Bug(fake_args()).read_file(&dirs)?.contains("🐛"),
@@ -147,6 +152,95 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn commit_msg_without_ticket_override_using_branch_name() -> anyhow::Result<()> {
+        let (dirs, templates_path) = fake_project_dir()?;
+
+        let context = Context {
+            project_dir: dirs,
+            connection: Connection::open_in_memory()?,
+            commands: Git,
+        };
+
+        let args = Arguments {
+            message: Faker.fake(),
+            ticket: None,
+        };
+
+        let branch_name = context.commands.get_branch_name()?;
+        let repo_name = context.commands.get_repo_name()?;
+        setup_db(
+            &context.connection,
+            Some(&fake_branch(Some(branch_name.clone()), Some(repo_name))?),
+        )?;
+
+        let expected_templates = [
+            ("🐛", Template::Bug(args.clone()).commit(&context)?),
+            ("✨", Template::Feature(args.clone()).commit(&context)?),
+            ("🧹", Template::Refactor(args.clone()).commit(&context)?),
+            ("⚠️", Template::Break(args.clone()).commit(&context)?),
+            ("📦", Template::Deps(args.clone()).commit(&context)?),
+            ("📖", Template::Docs(args.clone()).commit(&context)?),
+            ("🧪", Template::Test(args.clone()).commit(&context)?),
+        ];
+
+        for (template, msg) in expected_templates {
+            let expected = format!(
+                "[{}] {} {}",
+                branch_name,
+                template,
+                args.message.clone().unwrap_or("".into())
+            );
+            assert_eq!(msg, expected);
+        }
+
+        fs::remove_dir_all(templates_path)?;
+        context.close()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn commit_msg_with_ticket_override() -> anyhow::Result<()> {
+        let (dirs, templates_path) = fake_project_dir()?;
+
+        let context = Context {
+            project_dir: dirs,
+            connection: Connection::open_in_memory()?,
+            commands: Git,
+        };
+
+        let args = Arguments {
+            message: Faker.fake(),
+            ticket: Some(Faker.fake()),
+        };
+
+        let expected_templates = [
+            ("🐛", Template::Bug(args.clone()).commit(&context)?),
+            ("✨", Template::Feature(args.clone()).commit(&context)?),
+            ("🧹", Template::Refactor(args.clone()).commit(&context)?),
+            ("⚠️", Template::Break(args.clone()).commit(&context)?),
+            ("📦", Template::Deps(args.clone()).commit(&context)?),
+            ("📖", Template::Docs(args.clone()).commit(&context)?),
+            ("🧪", Template::Test(args.clone()).commit(&context)?),
+        ];
+
+        for (template, msg) in expected_templates {
+            let expected = format!(
+                "[{}] {} {}",
+                args.ticket.clone().unwrap_or("".into()),
+                template,
+                args.message.clone().unwrap_or("".into())
+            );
+            assert_eq!(msg, expected);
+        }
+
+        fs::remove_dir_all(templates_path)?;
+        context.close()?;
+
+        Ok(())
+    }
+
     fn copy_or_replace(source_path: &PathBuf, target_path: &PathBuf) -> std::io::Result<()> {
         match fs::read_dir(source_path) {
             Ok(entry_iter) => {
@@ -159,6 +253,52 @@ mod tests {
             Err(_) => {
                 fs::copy(&source_path, &target_path)?;
             }
+        }
+
+        Ok(())
+    }
+
+    fn fake_project_dir() -> anyhow::Result<(ProjectDirs, PathBuf)> {
+        let dirs = ProjectDirs::from(&format!("{}", Uuid::new_v4()), "xsv24", "git-kit")
+            .context("Failed to retrieve 'git-kit' config")?;
+
+        // https://doc.rust-lang.org/cargo/reference/environment-variables.html
+        let project_root = &env::var("CARGO_MANIFEST_DIR")?;
+        let templates_path = &dirs.config_dir().join("templates/");
+
+        copy_or_replace(&Path::new(project_root).join("templates/"), templates_path)?;
+
+        Ok((dirs, templates_path.to_owned()))
+    }
+
+    fn fake_branch(name: Option<String>, repo: Option<String>) -> anyhow::Result<Branch> {
+        let name = name.unwrap_or(Faker.fake());
+        let repo = repo.unwrap_or(Faker.fake());
+
+        Ok(Branch::new(&name, &repo, None)?)
+    }
+
+    fn setup_db(conn: &Connection, branch: Option<&Branch>) -> anyhow::Result<()> {
+        conn.execute(
+            "CREATE TABLE branch (
+                name TEXT NOT NULL PRIMARY KEY,
+                ticket TEXT,
+                data BLOB,
+                created TEXT NOT NULL
+            )",
+            (),
+        )?;
+
+        if let Some(branch) = branch {
+            conn.execute(
+                "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+                (
+                    &branch.name,
+                    &branch.ticket,
+                    &branch.data,
+                    branch.created.to_rfc3339(),
+                ),
+            )?;
         }
 
         Ok(())

@@ -1,8 +1,8 @@
-use anyhow::Context;
+use anyhow::Context as anyhow_context;
 use chrono::{DateTime, Utc};
 use rusqlite::{types::Type, Connection, Row};
 
-use crate::git_commands::get_repo_name;
+use crate::{context::Context, git_commands::GitCommands};
 
 #[derive(Debug, Clone)]
 pub struct Branch {
@@ -13,9 +13,9 @@ pub struct Branch {
 }
 
 impl Branch {
-    pub fn new(name: &str, ticket: Option<String>) -> anyhow::Result<Branch> {
+    pub fn new(name: &str, repo: &str, ticket: Option<String>) -> anyhow::Result<Branch> {
         Ok(Branch {
-            name: format!("{}-{}", get_repo_name()?, name.trim()),
+            name: format!("{}-{}", repo.trim(), name.trim()),
             created: Utc::now(),
             ticket: ticket.unwrap_or(name.into()),
             data: None,
@@ -37,10 +37,14 @@ impl Branch {
         Ok(())
     }
 
-    pub fn get(branch: &str, conn: &Connection) -> anyhow::Result<Branch> {
-        let name = format!("{}-{}", get_repo_name()?, branch.trim());
+    pub fn get<C: GitCommands>(
+        branch: &str,
+        repo: &str,
+        connext: &Context<C>,
+    ) -> anyhow::Result<Branch> {
+        let name = format!("{}-{}", repo.trim(), branch.trim());
 
-        let branch = conn.query_row(
+        let branch = connext.connection.query_row(
             "SELECT name, ticket, data, created FROM branch where name = ?",
             [name],
             |row| Branch::try_from(row),
@@ -79,26 +83,31 @@ impl<'a> TryFrom<&Row<'a>> for Branch {
 
 #[cfg(test)]
 mod tests {
+    use crate::git_commands::Git;
+
     use super::*;
 
-    use anyhow::Context;
+    use anyhow::Context as anyhow_context;
     use chrono::Utc;
+    use directories::ProjectDirs;
     use fake::{Fake, Faker};
     use rusqlite::Connection;
     use std::collections::HashMap;
+    use uuid::Uuid;
 
     #[test]
     fn creating_branch_with_ticket_populates_correctly() -> anyhow::Result<()> {
         // Arrange
         let now = Utc::now();
-        let name: String = Faker.fake();
-        let ticket: String = Faker.fake();
+        let repo = Faker.fake::<String>();
+        let name = Faker.fake::<String>();
+        let ticket = Faker.fake::<String>();
 
         // Act
-        let branch = Branch::new(&name, Some(ticket.clone()))?;
+        let branch = Branch::new(&name, &repo, Some(ticket.clone()))?;
 
         // Assert
-        assert_eq!(branch.name, format!("git-kit-{}", &name));
+        assert_eq!(branch.name, format!("{}-{}", &repo, &name));
         assert_eq!(branch.ticket, ticket);
         assert!(branch.created > now);
         assert_eq!(branch.data, None);
@@ -110,13 +119,14 @@ mod tests {
     fn creating_branch_without_ticket_defaults_to_name() -> anyhow::Result<()> {
         // Arrange
         let now = Utc::now();
-        let name: String = Faker.fake();
+        let name = Faker.fake::<String>();
+        let repo = Faker.fake::<String>();
 
         // Act
-        let branch = Branch::new(&name, None)?;
+        let branch = Branch::new(&name, &repo, None)?;
 
         // Assert
-        assert_eq!(branch.name, format!("git-kit-{}", &name));
+        assert_eq!(branch.name, format!("{}-{}", &repo, &name));
         assert_eq!(branch.ticket, name);
         assert!(branch.created > now);
         assert_eq!(branch.data, None);
@@ -128,14 +138,15 @@ mod tests {
     fn branch_name_is_trimmed() -> anyhow::Result<()> {
         // Arrange
         let now = Utc::now();
-        let name: String = format!("{}\n", Faker.fake::<String>());
-        let ticket: String = Faker.fake();
+        let name = format!("{}\n", Faker.fake::<String>());
+        let ticket = Faker.fake::<String>();
+        let repo = Faker.fake::<String>();
 
         // Act
-        let branch = Branch::new(&name, Some(ticket.clone()))?;
+        let branch = Branch::new(&name, &repo, Some(ticket.clone()))?;
 
         // Assert
-        assert_eq!(branch.name, format!("git-kit-{}", &name.trim()));
+        assert_eq!(branch.name, format!("{}-{}", &repo.trim(), &name.trim()));
         assert_eq!(branch.ticket, ticket);
         assert!(branch.created > now);
         assert_eq!(branch.data, None);
@@ -146,7 +157,7 @@ mod tests {
     #[test]
     fn insert_or_update_creates_a_new_item_if_not_exists() -> anyhow::Result<()> {
         // Arrange
-        let branch = fake_branch(None)?;
+        let branch = fake_branch(None, None)?;
         let conn = setup_db()?;
 
         // Act
@@ -168,7 +179,7 @@ mod tests {
     #[test]
     fn insert_or_update_updates_an_existing_item() -> anyhow::Result<()> {
         // Arrange
-        let branch = fake_branch(None)?;
+        let branch = fake_branch(None, None)?;
         let conn = setup_db()?;
 
         conn.execute(
@@ -183,7 +194,7 @@ mod tests {
 
         let updated_branch = Branch {
             name: branch.name,
-            ..fake_branch(None)?
+            ..fake_branch(None, None)?
         };
 
         // Act
@@ -205,17 +216,22 @@ mod tests {
     #[test]
     fn get_retrieves_correct_branch() -> anyhow::Result<()> {
         // Arrange
-        let conn = setup_db()?;
+        let context = Context {
+            connection: setup_db()?,
+            project_dir: fake_project_dir()?,
+            commands: Git,
+        };
+
         let mut branches: HashMap<String, Branch> = HashMap::new();
+        let repo = Faker.fake::<String>();
 
         // Insert random collection of branches.
         for _ in 0..(2..10).fake() {
-            let name: String = Faker.fake();
-            let branch = fake_branch(Some(name.clone()))?;
-
+            let name = Faker.fake::<String>();
+            let branch = fake_branch(Some(name.clone()), Some(repo.clone()))?;
             branches.insert(name, branch.clone());
 
-            conn.execute(
+            context.connection.execute(
                 "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
                 (
                     &branch.name,
@@ -237,8 +253,9 @@ mod tests {
             .with_context(|| "Expected to find a matching branch")?;
 
         // Act
-        let branch = Branch::get(&random_key, &conn)?;
+        let branch = Branch::get(&random_key, &repo, &context)?;
 
+        context.close()?;
         // Assert
         assert_eq!(random_branch.name, branch.name);
         assert_eq!(random_branch.ticket, branch.ticket);
@@ -254,13 +271,18 @@ mod tests {
     #[test]
     fn get_trims_name_before_retrieving() -> anyhow::Result<()> {
         // Arrange
-        let conn = setup_db()?;
+        let context = Context {
+            connection: setup_db()?,
+            project_dir: fake_project_dir()?,
+            commands: Git,
+        };
 
         // Insert random collection of branches.
-        let name: String = Faker.fake();
-        let expected = fake_branch(Some(name.clone()))?;
+        let name = Faker.fake::<String>();
+        let repo = Faker.fake::<String>();
+        let expected = fake_branch(Some(name.clone()), Some(repo.clone()))?;
 
-        conn.execute(
+        context.connection.execute(
             "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
             (
                 &expected.name,
@@ -271,19 +293,28 @@ mod tests {
         )?;
 
         // Act
-        let actual = Branch::get(&format!(" {}\n", name), &conn)?;
+        let actual = Branch::get(&format!(" {}\n", name), &repo, &context)?;
 
+        context.close()?;
         // Assert
         assert_eq!(actual.name, expected.name);
 
         Ok(())
     }
 
-    fn fake_branch(name: Option<String>) -> anyhow::Result<Branch> {
-        let name: String = name.unwrap_or(Faker.fake());
+    fn fake_branch(name: Option<String>, repo: Option<String>) -> anyhow::Result<Branch> {
+        let name = name.unwrap_or(Faker.fake());
+        let repo = repo.unwrap_or(Faker.fake());
         let ticket: Option<String> = Faker.fake();
 
-        Ok(Branch::new(&name, ticket)?)
+        Ok(Branch::new(&name, &repo, ticket)?)
+    }
+
+    fn fake_project_dir() -> anyhow::Result<ProjectDirs> {
+        let dirs = ProjectDirs::from(&format!("{}", Uuid::new_v4()), "xsv24", "git-kit")
+            .context("Failed to retrieve 'git-kit' config")?;
+
+        Ok(dirs)
     }
 
     fn select_branch_row(

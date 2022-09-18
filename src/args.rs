@@ -1,6 +1,5 @@
-use crate::{branch::Branch, git_commands::get_branch_name, try_convert::TryConvert};
+use crate::{branch::Branch, context::Context, git_commands::GitCommands};
 use clap::Args;
-use rusqlite::Connection;
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
 pub struct Arguments {
@@ -14,10 +13,22 @@ pub struct Arguments {
 }
 
 impl Arguments {
-    pub fn commit_message(&self, template: String, conn: &Connection) -> anyhow::Result<String> {
+    pub fn commit_message<C: GitCommands>(
+        &self,
+        template: String,
+        context: &Context<C>,
+    ) -> anyhow::Result<String> {
         let ticket_num = match &self.ticket {
             Some(num) => num.into(),
-            None => Branch::get(&get_branch_name().try_convert()?, &conn)?.ticket,
+            None => {
+                let branch = Branch::get(
+                    &context.commands.get_branch_name()?,
+                    &context.commands.get_repo_name()?,
+                    &context,
+                )?;
+
+                branch.ticket
+            }
         };
 
         let contents = template.replace("{ticket_num}", &format!("[{}]", ticket_num));
@@ -33,22 +44,69 @@ impl Arguments {
 
 #[cfg(test)]
 mod tests {
+    use directories::ProjectDirs;
     use fake::{Fake, Faker};
+    use rusqlite::Connection;
+    use uuid::Uuid;
 
     use super::*;
 
+    #[derive(Clone)]
+    struct TestCommand {
+        repo: String,
+        branch_name: String,
+    }
+
+    impl TestCommand {
+        fn fake() -> TestCommand {
+            TestCommand {
+                repo: Faker.fake(),
+                branch_name: Faker.fake(),
+            }
+        }
+    }
+
+    impl GitCommands for TestCommand {
+        fn get_repo_name(&self) -> anyhow::Result<String> {
+            Ok(self.repo.to_owned())
+        }
+
+        fn get_branch_name(&self) -> anyhow::Result<String> {
+            Ok(self.branch_name.to_owned())
+        }
+
+        fn checkout(
+            &self,
+            _name: &str,
+            _status: crate::git_commands::CheckoutStatus,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn commit(&self, _msg: &str) -> anyhow::Result<()> {
+            todo!()
+        }
+    }
+
     #[test]
     fn commit_message_with_both_args_are_populated() -> anyhow::Result<()> {
-        let conn = setup_db(None)?;
+        let project_dir = fake_project_dir()?;
+
+        let context = Context {
+            connection: setup_db(None)?,
+            project_dir,
+            commands: TestCommand::fake(),
+        };
 
         let args = Arguments {
             ticket: Some(Faker.fake()),
             message: Some(Faker.fake()),
         };
 
-        let actual = args.commit_message("{ticket_num} {message}".into(), &conn)?;
+        let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
         let expected = format!("[{}] {}", args.ticket.unwrap(), args.message.unwrap());
 
+        context.close()?;
         assert_eq!(actual, expected);
 
         Ok(())
@@ -56,16 +114,23 @@ mod tests {
 
     #[test]
     fn commit_template_message_is_replaced_with_empty_str() -> anyhow::Result<()> {
-        let conn = setup_db(None)?;
+        let project_dir = fake_project_dir()?;
+
+        let context = Context {
+            connection: setup_db(None)?,
+            project_dir,
+            commands: TestCommand::fake(),
+        };
 
         let args = Arguments {
             ticket: Some(Faker.fake()),
             message: None,
         };
 
-        let actual = args.commit_message("{ticket_num} {message}".into(), &conn)?;
+        let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
         let expected = format!("[{}] ", args.ticket.unwrap());
 
+        context.close()?;
         assert_eq!(actual, expected);
 
         Ok(())
@@ -73,22 +138,37 @@ mod tests {
 
     #[test]
     fn commit_template_ticket_num_is_replaced_with_branch_name() -> anyhow::Result<()> {
-        let name = get_branch_name().try_convert()?;
-        let branch = Branch::new(&name, None)?;
+        let project_dir = fake_project_dir()?;
+        let commands = TestCommand::fake();
 
-        let conn = setup_db(Some(&branch))?;
+        let branch = Branch::new(&commands.branch_name, &commands.repo, None)?;
+
+        let context = Context {
+            connection: setup_db(Some(&branch))?,
+            commands: commands.clone(),
+            project_dir,
+        };
 
         let args = Arguments {
             ticket: None,
             message: Some(Faker.fake()),
         };
 
-        let actual = args.commit_message("{ticket_num} {message}".into(), &conn)?;
-        let expected = format!("[{}] {}", name, args.message.unwrap());
+        let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
+        let expected = format!("[{}] {}", &commands.branch_name, args.message.unwrap());
+
+        context.close()?;
 
         assert_eq!(actual, expected);
 
         Ok(())
+    }
+
+    fn fake_project_dir() -> anyhow::Result<ProjectDirs> {
+        let dirs = ProjectDirs::from(&format!("{}", Uuid::new_v4()), "xsv24", "git-kit")
+            .expect("Failed to retrieve 'git-kit' config");
+
+        Ok(dirs)
     }
 
     fn setup_db(branch: Option<&Branch>) -> anyhow::Result<Connection> {
