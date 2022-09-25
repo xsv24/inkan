@@ -11,6 +11,7 @@ use clap::{Args, Parser, Subcommand};
 #[clap(name = "git-kit")]
 #[clap(bin_name = "git-kit")]
 #[clap(about = "git cli containing templates & utilities.", long_about = None)]
+#[clap(version)]
 pub struct Cli {
     #[clap(subcommand)]
     pub command: Command,

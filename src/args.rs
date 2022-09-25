@@ -31,7 +31,11 @@ impl Arguments {
             }
         };
 
-        let contents = template.replace("{ticket_num}", &format!("[{}]", ticket_num));
+        let contents = if !ticket_num.is_empty() {
+            template.replace("{ticket_num}", &format!("[{}]", ticket_num))
+        } else {
+            template.replace("{ticket_num}", "").trim().into()
+        };
 
         let contents = match &self.message {
             Some(message) => contents.replace("{message}", &message),
@@ -89,12 +93,32 @@ mod tests {
     }
 
     #[test]
-    fn commit_message_with_both_args_are_populated() -> anyhow::Result<()> {
-        let project_dir = fake_project_dir()?;
-
+    fn empty_ticket_num_removes_square_brackets() -> anyhow::Result<()> {
         let context = Context {
             connection: setup_db(None)?,
-            project_dir,
+            project_dir: fake_project_dir()?,
+            commands: TestCommand::fake(),
+        };
+
+        let args = Arguments {
+            ticket: Some("".into()),
+            message: Some(Faker.fake()),
+        };
+
+        let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
+        let expected = format!("{}", args.message.unwrap());
+
+        context.close()?;
+        assert_eq!(actual, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn commit_message_with_both_args_are_populated() -> anyhow::Result<()> {
+        let context = Context {
+            connection: setup_db(None)?,
+            project_dir: fake_project_dir()?,
             commands: TestCommand::fake(),
         };
 
@@ -114,11 +138,9 @@ mod tests {
 
     #[test]
     fn commit_template_message_is_replaced_with_empty_str() -> anyhow::Result<()> {
-        let project_dir = fake_project_dir()?;
-
         let context = Context {
             connection: setup_db(None)?,
-            project_dir,
+            project_dir: fake_project_dir()?,
             commands: TestCommand::fake(),
         };
 
@@ -138,7 +160,6 @@ mod tests {
 
     #[test]
     fn commit_template_ticket_num_is_replaced_with_branch_name() -> anyhow::Result<()> {
-        let project_dir = fake_project_dir()?;
         let commands = TestCommand::fake();
 
         let branch = Branch::new(&commands.branch_name, &commands.repo, None)?;
@@ -146,7 +167,7 @@ mod tests {
         let context = Context {
             connection: setup_db(Some(&branch))?,
             commands: commands.clone(),
-            project_dir,
+            project_dir: fake_project_dir()?,
         };
 
         let args = Arguments {
