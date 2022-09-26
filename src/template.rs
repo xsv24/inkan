@@ -24,7 +24,7 @@ pub enum Template {
 }
 
 impl Template {
-    pub fn file_name(&self) -> &str {
+    fn file_name(&self) -> &str {
         match self {
             Template::Bug(_) => "bug.md",
             Template::Feature(_) => "feature.md",
@@ -36,7 +36,7 @@ impl Template {
         }
     }
 
-    pub fn args(&self) -> &Arguments {
+    fn args(&self) -> &Arguments {
         match &self {
             Template::Bug(args) => args,
             Template::Feature(args) => args,
@@ -48,7 +48,7 @@ impl Template {
         }
     }
 
-    pub fn read_file(&self, project_dir: &ProjectDirs) -> anyhow::Result<String> {
+    fn read_file(&self, project_dir: &ProjectDirs) -> anyhow::Result<String> {
         let file_name = self.file_name();
         let sub_dir = format!("templates/commit/{}", file_name);
         let template = project_dir.config_dir().join(sub_dir);

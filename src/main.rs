@@ -1,3 +1,4 @@
+pub mod actions;
 pub mod args;
 pub mod branch;
 pub mod cli;
@@ -6,32 +7,25 @@ pub mod git_commands;
 pub mod template;
 pub mod try_convert;
 
+use actions::{Actions, CommandActions};
 use clap::Parser;
 use context::Context;
-use git_commands::{Git, GitCommands};
+use git_commands::Git;
 
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();
     let context = Context::new(Git)?;
-
-    // Could move into build script ?
-    context.connection.execute(
-        "CREATE TABLE IF NOT EXISTS branch (
-            name TEXT NOT NULL PRIMARY KEY,
-            ticket TEXT,
-            data BLOB,
-            created TEXT NOT NULL
-        )",
-        (),
-    )?;
+    let actions = CommandActions::new(&context)?;
 
     match args.command {
         cli::Command::Commit(template) => {
-            let contents = template.commit(&context)?;
-            context.commands.commit(&contents)?;
+            actions.commit(template)?;
         }
         cli::Command::Checkout(checkout) => {
-            checkout.checkout(&context)?;
+            actions.checkout(checkout)?;
+        }
+        cli::Command::Context(current) => {
+            actions.current(current)?;
         }
     };
 
