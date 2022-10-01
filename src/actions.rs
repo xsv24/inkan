@@ -43,7 +43,7 @@ impl<'a, C: GitCommands> Actions<C> for CommandActions<'a, C> {
         let repo_name = self.context.commands.get_repo_name()?;
         let branch_name = self.context.commands.get_branch_name()?;
 
-        let branch = Branch::new(&branch_name, &repo_name, Some(current.ticket.clone()))?;
+        let branch = Branch::new(&branch_name, &repo_name, Some(current.ticket))?;
         branch.insert_or_update(&self.context.connection)?;
 
         Ok(())
@@ -73,7 +73,7 @@ impl<'a, C: GitCommands> Actions<C> for CommandActions<'a, C> {
     }
 
     fn commit(&self, template: Template) -> anyhow::Result<()> {
-        let contents = template.commit(&self.context)?;
+        let contents = template.commit(self.context)?;
         self.context.commands.commit(&contents)?;
 
         Ok(())

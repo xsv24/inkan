@@ -30,7 +30,7 @@ impl GitCommands for Git {
         let repo_dir: String = git_command(&["rev-parse", "--show-toplevel"]).try_convert()?;
 
         let repo = repo_dir
-            .split("/")
+            .split('/')
             .last()
             .context("Failed to get repository name")?;
 

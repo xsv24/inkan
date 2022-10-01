@@ -24,7 +24,7 @@ impl Arguments {
                 let branch = Branch::get(
                     &context.commands.get_branch_name()?,
                     &context.commands.get_repo_name()?,
-                    &context,
+                    context,
                 )?;
 
                 branch.ticket
@@ -38,7 +38,7 @@ impl Arguments {
         };
 
         let contents = match &self.message {
-            Some(message) => contents.replace("{message}", &message),
+            Some(message) => contents.replace("{message}", message),
             None => contents.replace("{message}", ""),
         };
 

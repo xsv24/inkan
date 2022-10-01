@@ -63,7 +63,7 @@ impl Template {
     pub fn commit<C: GitCommands>(&self, context: &Context<C>) -> anyhow::Result<String> {
         let args = self.args();
         let template = self.read_file(&context.project_dir)?;
-        let contents = args.commit_message(template, &context)?;
+        let contents = args.commit_message(template, context)?;
 
         Ok(contents)
     }
@@ -259,7 +259,7 @@ mod tests {
     }
 
     fn fake_project_dir() -> anyhow::Result<(ProjectDirs, PathBuf)> {
-        let dirs = ProjectDirs::from(&format!("{}", Uuid::new_v4()), "xsv24", "git-kit")
+        let dirs = ProjectDirs::from("test", "xsv24", &format!("{}", Uuid::new_v4()))
             .context("Failed to retrieve 'git-kit' config")?;
 
         // https://doc.rust-lang.org/cargo/reference/environment-variables.html
@@ -267,8 +267,28 @@ mod tests {
         let templates_path = &dirs.config_dir().join("templates/");
 
         copy_or_replace(&Path::new(project_root).join("templates/"), templates_path)?;
+        pretty_print_templates(&templates_path)?;
 
         Ok((dirs, templates_path.to_owned()))
+    }
+
+    fn pretty_print_templates(templates_path: &PathBuf) -> anyhow::Result<()> {
+        let paths = fs::read_dir(&templates_path.join("commit/")).unwrap();
+
+        println!("Coping templates ➜ {:?}", templates_path);
+        for path in paths {
+            let file_path = path.unwrap().path();
+            let file_path = file_path
+                .to_str()
+                .context("Expected template path to convert to a string")?;
+
+            println!(
+                "Copied template ➜ '{}'",
+                file_path.replace(&templates_path.display().to_string(), "")
+            );
+        }
+
+        Ok(())
     }
 
     fn fake_branch(name: Option<String>, repo: Option<String>) -> anyhow::Result<Branch> {

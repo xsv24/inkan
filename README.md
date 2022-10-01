@@ -2,6 +2,7 @@
 [![git-logo](https://img.shields.io/badge/git-F05032?style=for-the-badge&logo=git&logoColor=white)](https://git-scm.com/)
 
 [![crates.io](https://img.shields.io/crates/v/git-kit?label=%F0%9F%93%A6%20git-kit&style=flat-square)](https://crates.io/crates/git-kit)
+[![Main branch checks](https://img.shields.io/github/checks-status/xsv24/git-kit/main?label=%F0%9F%91%8C%20checks&style=flat-square)](https://github.com/xsv24/git-kit/actions)
 [![license](https://img.shields.io/github/license/xsv24/git-kit?color=blue&style=flat-square&logo=)](./LICENSE)
 
 # 🧰 git-kit

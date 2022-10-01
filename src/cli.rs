@@ -1,10 +1,4 @@
-use crate::{
-    branch::Branch,
-    context::Context,
-    git_commands::{CheckoutStatus, GitCommands},
-    template::Template,
-};
-use anyhow;
+use crate::template::Template;
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
@@ -35,20 +29,6 @@ pub struct Current {
     pub ticket: String,
 }
 
-impl Current {
-    pub fn current<C: GitCommands>(&self, context: &Context<C>) -> anyhow::Result<()> {
-        // We want to store the branch name against and ticket number
-        // So whenever we commit we get the ticket number from the branch
-        let repo_name = context.commands.get_repo_name()?;
-        let branch_name = context.commands.get_branch_name()?;
-
-        let branch = Branch::new(&branch_name, &repo_name, Some(self.ticket.clone()))?;
-        branch.insert_or_update(&context.connection)?;
-
-        Ok(())
-    }
-}
-
 #[derive(Debug, Args, Clone)]
 pub struct Checkout {
     /// Name of the branch to checkout or create.
@@ -58,26 +38,4 @@ pub struct Checkout {
     /// Issue ticket number related to the branch.
     #[clap(short, long, value_parser)]
     pub ticket: Option<String>,
-}
-
-impl Checkout {
-    pub fn checkout<C: GitCommands>(&self, context: &Context<C>) -> anyhow::Result<()> {
-        // We want to store the branch name against and ticket number
-        // So whenever we commit we get the ticket number from the branch
-        let repo_name = context.commands.get_repo_name()?;
-        let branch = Branch::new(&self.name, &repo_name, self.ticket.clone())?;
-        branch.insert_or_update(&context.connection)?;
-
-        // Attempt to create branch
-        let create = context.commands.checkout(&self.name, CheckoutStatus::New);
-
-        // If the branch exists check it out
-        if !create.is_err() {
-            context
-                .commands
-                .checkout(&self.name, CheckoutStatus::Existing)?;
-        }
-
-        Ok(())
-    }
 }

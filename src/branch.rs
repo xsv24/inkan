@@ -17,7 +17,7 @@ impl Branch {
         Ok(Branch {
             name: format!("{}-{}", repo.trim(), name.trim()),
             created: Utc::now(),
-            ticket: ticket.unwrap_or(name.into()),
+            ticket: ticket.unwrap_or_else(|| name.into()),
             data: None,
         })
     }
