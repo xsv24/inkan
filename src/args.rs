@@ -18,21 +18,23 @@ impl Arguments {
         template: String,
         context: &Context<C>,
     ) -> anyhow::Result<String> {
-        let ticket_num = match &self.ticket {
-            Some(num) => num.into(),
-            None => {
-                let branch = Branch::get(
-                    &context.commands.get_branch_name()?,
-                    &context.commands.get_repo_name()?,
-                    context,
-                )?;
+        let ticket = self.ticket.as_ref().map(|num| num.trim());
 
-                branch.ticket
-            }
+        let ticket_num = match ticket {
+            Some(num) => match (num, num.len()) {
+                (_, 0) => None,
+                (value, _) => Some(value.into()),
+            },
+            None => Branch::get(
+                &context.commands.get_branch_name()?,
+                &context.commands.get_repo_name()?,
+                context,
+            )
+            .map_or(None, |branch| Some(branch.ticket)),
         };
 
-        let contents = if !ticket_num.is_empty() {
-            template.replace("{ticket_num}", &format!("[{}]", ticket_num))
+        let contents = if let Some(ticket) = ticket_num {
+            template.replace("{ticket_num}", &format!("[{}]", ticket))
         } else {
             template.replace("{ticket_num}", "").trim().into()
         };
@@ -110,6 +112,30 @@ mod tests {
 
         context.close()?;
         assert_eq!(actual, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn when_ticket_num_is_empty_square_brackets_are_removed() -> anyhow::Result<()> {
+        for ticket in [Some("".into()), Some("   ".into()), None] {
+            let context = Context {
+                connection: setup_db(None)?,
+                project_dir: fake_project_dir()?,
+                commands: TestCommand::fake(),
+            };
+
+            let args = Arguments {
+                ticket,
+                message: Some(Faker.fake()),
+            };
+
+            let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
+            let expected = format!("{}", args.message.unwrap());
+
+            context.close()?;
+            assert_eq!(actual, expected);
+        }
 
         Ok(())
     }
