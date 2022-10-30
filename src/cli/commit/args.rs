@@ -1,4 +1,4 @@
-use crate::{branch::Branch, context::Context, git_commands::GitCommands};
+use crate::{app_context::AppContext, domain::commands::GitCommands, domain::store::Store};
 use clap::Args;
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
@@ -13,10 +13,10 @@ pub struct Arguments {
 }
 
 impl Arguments {
-    pub fn commit_message<C: GitCommands>(
+    pub fn commit_message<C: GitCommands, S: Store>(
         &self,
         template: String,
-        context: &Context<C>,
+        context: &AppContext<C, S>,
     ) -> anyhow::Result<String> {
         let ticket = self.ticket.as_ref().map(|num| num.trim());
 
@@ -25,12 +25,13 @@ impl Arguments {
                 (_, 0) => None,
                 (value, _) => Some(value.into()),
             },
-            None => Branch::get(
-                &context.commands.get_branch_name()?,
-                &context.commands.get_repo_name()?,
-                context,
-            )
-            .map_or(None, |branch| Some(branch.ticket)),
+            None => context
+                .store
+                .get(
+                    &context.commands.get_branch_name()?,
+                    &context.commands.get_repo_name()?,
+                )
+                .map_or(None, |branch| Some(branch.ticket)),
         };
 
         let contents = if let Some(ticket) = ticket_num {
@@ -54,6 +55,14 @@ mod tests {
     use fake::{Fake, Faker};
     use rusqlite::Connection;
     use uuid::Uuid;
+
+    use crate::{
+        adapters::sqlite::Sqlite,
+        domain::{
+            commands::{CheckoutStatus, GitCommands},
+            Branch,
+        },
+    };
 
     use super::*;
 
@@ -81,11 +90,7 @@ mod tests {
             Ok(self.branch_name.to_owned())
         }
 
-        fn checkout(
-            &self,
-            _name: &str,
-            _status: crate::git_commands::CheckoutStatus,
-        ) -> anyhow::Result<()> {
+        fn checkout(&self, _name: &str, _status: CheckoutStatus) -> anyhow::Result<()> {
             todo!()
         }
 
@@ -96,8 +101,8 @@ mod tests {
 
     #[test]
     fn empty_ticket_num_removes_square_brackets() -> anyhow::Result<()> {
-        let context = Context {
-            connection: setup_db(None)?,
+        let context = AppContext {
+            store: Sqlite::new(setup_db(None)?)?,
             project_dir: fake_project_dir()?,
             commands: TestCommand::fake(),
         };
@@ -119,8 +124,8 @@ mod tests {
     #[test]
     fn when_ticket_num_is_empty_square_brackets_are_removed() -> anyhow::Result<()> {
         for ticket in [Some("".into()), Some("   ".into()), None] {
-            let context = Context {
-                connection: setup_db(None)?,
+            let context = AppContext {
+                store: Sqlite::new(setup_db(None)?)?,
                 project_dir: fake_project_dir()?,
                 commands: TestCommand::fake(),
             };
@@ -142,8 +147,8 @@ mod tests {
 
     #[test]
     fn commit_message_with_both_args_are_populated() -> anyhow::Result<()> {
-        let context = Context {
-            connection: setup_db(None)?,
+        let context = AppContext {
+            store: Sqlite::new(setup_db(None)?)?,
             project_dir: fake_project_dir()?,
             commands: TestCommand::fake(),
         };
@@ -164,8 +169,8 @@ mod tests {
 
     #[test]
     fn commit_template_message_is_replaced_with_empty_str() -> anyhow::Result<()> {
-        let context = Context {
-            connection: setup_db(None)?,
+        let context = AppContext {
+            store: Sqlite::new(setup_db(None)?)?,
             project_dir: fake_project_dir()?,
             commands: TestCommand::fake(),
         };
@@ -190,8 +195,8 @@ mod tests {
 
         let branch = Branch::new(&commands.branch_name, &commands.repo, None)?;
 
-        let context = Context {
-            connection: setup_db(Some(&branch))?,
+        let context = AppContext {
+            store: Sqlite::new(setup_db(Some(&branch))?)?,
             commands: commands.clone(),
             project_dir: fake_project_dir()?,
         };

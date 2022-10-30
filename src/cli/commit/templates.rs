@@ -3,7 +3,11 @@ use clap::Subcommand;
 use directories::ProjectDirs;
 use std::fs;
 
-use crate::{args::Arguments, context::Context, git_commands::GitCommands};
+use crate::{
+    app_context::AppContext,
+    cli::commit::args::Arguments,
+    domain::{commands::GitCommands, Store},
+};
 
 #[derive(Debug, Subcommand)]
 pub enum Template {
@@ -60,7 +64,10 @@ impl Template {
         Ok(contents)
     }
 
-    pub fn commit<C: GitCommands>(&self, context: &Context<C>) -> anyhow::Result<String> {
+    pub fn commit<C: GitCommands, S: Store>(
+        &self,
+        context: &AppContext<C, S>,
+    ) -> anyhow::Result<String> {
         let args = self.args();
         let template = self.read_file(&context.project_dir)?;
         let contents = args.commit_message(template, context)?;
@@ -79,7 +86,10 @@ mod tests {
     };
     use uuid::Uuid;
 
-    use crate::{branch::Branch, git_commands::Git};
+    use crate::{
+        adapters::{sqlite::Sqlite, Git},
+        domain::{Branch, Store},
+    };
 
     use super::*;
 
@@ -156,9 +166,9 @@ mod tests {
     fn commit_msg_without_ticket_override_using_branch_name() -> anyhow::Result<()> {
         let (dirs, templates_path) = fake_project_dir()?;
 
-        let context = Context {
+        let context = AppContext {
             project_dir: dirs,
-            connection: Connection::open_in_memory()?,
+            store: Sqlite::new(Connection::open_in_memory()?)?,
             commands: Git,
         };
 
@@ -170,7 +180,7 @@ mod tests {
         let branch_name = context.commands.get_branch_name()?;
         let repo_name = context.commands.get_repo_name()?;
         setup_db(
-            &context.connection,
+            &context.store,
             Some(&fake_branch(Some(branch_name.clone()), Some(repo_name))?),
         )?;
 
@@ -204,9 +214,9 @@ mod tests {
     fn commit_msg_with_ticket_override() -> anyhow::Result<()> {
         let (dirs, templates_path) = fake_project_dir()?;
 
-        let context = Context {
+        let context = AppContext {
             project_dir: dirs,
-            connection: Connection::open_in_memory()?,
+            store: Sqlite::new(Connection::open_in_memory()?)?,
             commands: Git,
         };
 
@@ -298,27 +308,9 @@ mod tests {
         Ok(Branch::new(&name, &repo, None)?)
     }
 
-    fn setup_db(conn: &Connection, branch: Option<&Branch>) -> anyhow::Result<()> {
-        conn.execute(
-            "CREATE TABLE branch (
-                name TEXT NOT NULL PRIMARY KEY,
-                ticket TEXT,
-                data BLOB,
-                created TEXT NOT NULL
-            )",
-            (),
-        )?;
-
+    fn setup_db(store: &Sqlite, branch: Option<&Branch>) -> anyhow::Result<()> {
         if let Some(branch) = branch {
-            conn.execute(
-                "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
-                (
-                    &branch.name,
-                    &branch.ticket,
-                    &branch.data,
-                    branch.created.to_rfc3339(),
-                ),
-            )?;
+            store.insert_or_update(branch.into())?;
         }
 
         Ok(())
