@@ -101,7 +101,12 @@ impl<'a> TryFrom<&Row<'a>> for Branch {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::{adapters::Git, app_context::AppContext, domain::Store as domain};
+    use crate::{
+        adapters::Git,
+        app_context::AppContext,
+        config::{CommitConfig, Config},
+        domain::Store as domain,
+    };
 
     use super::*;
     use directories::ProjectDirs;
@@ -199,6 +204,7 @@ mod tests {
             store,
             project_dir: fake_project_dir()?,
             commands: Git,
+            config: fake_config(),
         };
 
         let keys = branches.keys().cloned().collect::<Vec<String>>();
@@ -234,6 +240,7 @@ mod tests {
             store: Sqlite::new(setup_db()?)?,
             project_dir: fake_project_dir()?,
             commands: Git,
+            config: fake_config(),
         };
 
         // Insert random collection of branches.
@@ -259,6 +266,14 @@ mod tests {
         assert_eq!(actual.name, expected.name);
 
         Ok(())
+    }
+
+    fn fake_config() -> Config {
+        Config {
+            commit: CommitConfig {
+                templates: HashMap::new(),
+            },
+        }
     }
 
     fn fake_branch(name: Option<String>, repo: Option<String>) -> anyhow::Result<Branch> {

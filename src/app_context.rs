@@ -1,11 +1,15 @@
 use directories::ProjectDirs;
 
-use crate::domain::{commands::GitCommands, Store};
+use crate::{
+    config::Config,
+    domain::{commands::GitCommands, Store},
+};
 
 pub struct AppContext<C: GitCommands, S: Store> {
     pub project_dir: ProjectDirs,
     pub store: S,
     pub commands: C,
+    pub config: Config,
 }
 
 impl<C: GitCommands, S: Store> AppContext<C, S> {
@@ -13,11 +17,13 @@ impl<C: GitCommands, S: Store> AppContext<C, S> {
         commands: C,
         store: S,
         project_dir: ProjectDirs,
+        config: Config,
     ) -> anyhow::Result<AppContext<C, S>> {
         Ok(AppContext {
             project_dir,
             store,
             commands,
+            config,
         })
     }
 

@@ -1,5 +1,5 @@
 mod args;
-mod templates;
+mod handler;
 
 pub use args::Arguments;
-pub use templates::Template;
+pub use handler::handler;

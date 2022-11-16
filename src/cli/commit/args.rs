@@ -3,6 +3,9 @@ use clap::Args;
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
 pub struct Arguments {
+    /// Name of the commit template to be used.
+    pub template: String,
+
     /// Issue ticket number related to the commit.
     #[clap(short, long, value_parser)]
     pub ticket: Option<String>,
@@ -51,18 +54,22 @@ impl Arguments {
 
 #[cfg(test)]
 mod tests {
-    use directories::ProjectDirs;
-    use fake::{Fake, Faker};
-    use rusqlite::Connection;
-    use uuid::Uuid;
+    use std::collections::HashMap;
 
     use crate::{
         adapters::sqlite::Sqlite,
+        config::{CommitConfig, Config, TemplateConfig},
         domain::{
             commands::{CheckoutStatus, GitCommands},
             Branch,
         },
     };
+    use anyhow::Context;
+    use directories::ProjectDirs;
+    use fake::{Fake, Faker};
+    use rusqlite::Connection;
+    use std::fs;
+    use uuid::Uuid;
 
     use super::*;
 
@@ -97,6 +104,10 @@ mod tests {
         fn commit(&self, _msg: &str) -> anyhow::Result<()> {
             todo!()
         }
+
+        fn root_directory(&self) -> anyhow::Result<String> {
+            todo!()
+        }
     }
 
     #[test]
@@ -105,17 +116,19 @@ mod tests {
             store: Sqlite::new(setup_db(None)?)?,
             project_dir: fake_project_dir()?,
             commands: TestCommand::fake(),
+            config: fake_config(),
         };
 
         let args = Arguments {
             ticket: Some("".into()),
             message: Some(Faker.fake()),
+            ..fake_args()
         };
 
         let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
         let expected = format!("{}", args.message.unwrap());
 
-        context.close()?;
+        clean(context)?;
         assert_eq!(actual, expected);
 
         Ok(())
@@ -128,9 +141,11 @@ mod tests {
                 store: Sqlite::new(setup_db(None)?)?,
                 project_dir: fake_project_dir()?,
                 commands: TestCommand::fake(),
+                config: fake_config(),
             };
 
             let args = Arguments {
+                template: Faker.fake(),
                 ticket,
                 message: Some(Faker.fake()),
             };
@@ -138,7 +153,7 @@ mod tests {
             let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
             let expected = format!("{}", args.message.unwrap());
 
-            context.close()?;
+            clean(context)?;
             assert_eq!(actual, expected);
         }
 
@@ -151,9 +166,11 @@ mod tests {
             store: Sqlite::new(setup_db(None)?)?,
             project_dir: fake_project_dir()?,
             commands: TestCommand::fake(),
+            config: fake_config(),
         };
 
         let args = Arguments {
+            template: Faker.fake(),
             ticket: Some(Faker.fake()),
             message: Some(Faker.fake()),
         };
@@ -161,7 +178,7 @@ mod tests {
         let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
         let expected = format!("[{}] {}", args.ticket.unwrap(), args.message.unwrap());
 
-        context.close()?;
+        clean(context)?;
         assert_eq!(actual, expected);
 
         Ok(())
@@ -173,9 +190,11 @@ mod tests {
             store: Sqlite::new(setup_db(None)?)?,
             project_dir: fake_project_dir()?,
             commands: TestCommand::fake(),
+            config: fake_config(),
         };
 
         let args = Arguments {
+            template: Faker.fake(),
             ticket: Some(Faker.fake()),
             message: None,
         };
@@ -183,7 +202,7 @@ mod tests {
         let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
         let expected = format!("[{}] ", args.ticket.unwrap());
 
-        context.close()?;
+        clean(context)?;
         assert_eq!(actual, expected);
 
         Ok(())
@@ -199,28 +218,193 @@ mod tests {
             store: Sqlite::new(setup_db(Some(&branch))?)?,
             commands: commands.clone(),
             project_dir: fake_project_dir()?,
+            config: fake_config(),
         };
 
         let args = Arguments {
             ticket: None,
-            message: Some(Faker.fake()),
+            ..fake_args()
         };
 
         let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
-        let expected = format!("[{}] {}", &commands.branch_name, args.message.unwrap());
+        let expected = format!(
+            "[{}] {}",
+            &commands.branch_name,
+            args.message.unwrap_or_else(|| "".into())
+        );
 
-        context.close()?;
-
+        clean(context)?;
         assert_eq!(actual, expected);
 
         Ok(())
     }
 
+    fn fake_args() -> Arguments {
+        Arguments {
+            template: Faker.fake(),
+            ticket: Faker.fake(),
+            message: Faker.fake(),
+        }
+    }
+
+    fn get_arguments(args: Option<Arguments>) -> Vec<(&'static str, Arguments)> {
+        let args = args.unwrap_or_else(fake_args);
+
+        vec![
+            (
+                "🐛",
+                Arguments {
+                    template: "bug".into(),
+                    ..args.clone()
+                },
+            ),
+            (
+                "✨",
+                Arguments {
+                    template: "feature".into(),
+                    ..args.clone()
+                },
+            ),
+            (
+                "🧹",
+                Arguments {
+                    template: "refactor".into(),
+                    ..args.clone()
+                },
+            ),
+            (
+                "⚠️",
+                Arguments {
+                    template: "break".into(),
+                    ..args.clone()
+                },
+            ),
+            (
+                "📦",
+                Arguments {
+                    template: "deps".into(),
+                    ..args.clone()
+                },
+            ),
+            (
+                "📖",
+                Arguments {
+                    template: "docs".into(),
+                    ..args.clone()
+                },
+            ),
+            (
+                "🧪",
+                Arguments {
+                    template: "test".into(),
+                    ..args.clone()
+                },
+            ),
+        ]
+    }
+
+    #[test]
+    fn get_template_config_by_name_key() -> anyhow::Result<()> {
+        let config = fake_config();
+
+        for (content, arguments) in get_arguments(None) {
+            dbg!(&content, &arguments);
+            let template_config = config.get_template_config(&arguments.template)?;
+            dbg!(&template_config);
+            assert!(template_config.content.contains(content))
+        }
+
+        Ok(())
+    }
     fn fake_project_dir() -> anyhow::Result<ProjectDirs> {
         let dirs = ProjectDirs::from(&format!("{}", Uuid::new_v4()), "xsv24", "git-kit")
             .expect("Failed to retrieve 'git-kit' config");
 
         Ok(dirs)
+    }
+
+    fn clean<C: GitCommands, S: Store>(context: AppContext<C, S>) -> anyhow::Result<()> {
+        // Some of the directories might not be used so we won't throw it doesn't exist.
+        let _ = [
+            fs::remove_dir_all(context.project_dir.cache_dir())
+                .context("Failed to delete 'cache_dir'"),
+            fs::remove_dir(context.project_dir.config_dir())
+                .context("Failed to delete 'config_dir'"),
+            fs::remove_dir_all(context.project_dir.data_dir())
+                .context("Failed to delete 'data_dir'"),
+            fs::remove_dir_all(context.project_dir.data_local_dir())
+                .context("Failed to delete 'data_local_dir'"),
+        ];
+
+        context
+            .close()
+            .context("Failed to close sqlite connection")?;
+
+        Ok(())
+    }
+
+    fn fake_template_config() -> HashMap<String, TemplateConfig> {
+        let mut map = HashMap::new();
+
+        map.insert(
+            "bug".into(),
+            TemplateConfig {
+                description: Faker.fake(),
+                content: "{ticket_num} 🐛 {message}".into(),
+            },
+        );
+        map.insert(
+            "feature".into(),
+            TemplateConfig {
+                description: Faker.fake(),
+                content: "{ticket_num} ✨ {message}".into(),
+            },
+        );
+        map.insert(
+            "refactor".into(),
+            TemplateConfig {
+                description: Faker.fake(),
+                content: "{ticket_num} 🧹 {message}".into(),
+            },
+        );
+        map.insert(
+            "break".into(),
+            TemplateConfig {
+                description: Faker.fake(),
+                content: "{ticket_num} ⚠️ {message}".into(),
+            },
+        );
+        map.insert(
+            "deps".into(),
+            TemplateConfig {
+                description: Faker.fake(),
+                content: "{ticket_num} 📦 {message}".into(),
+            },
+        );
+        map.insert(
+            "docs".into(),
+            TemplateConfig {
+                description: Faker.fake(),
+                content: "{ticket_num} 📖 {message}".into(),
+            },
+        );
+        map.insert(
+            "test".into(),
+            TemplateConfig {
+                description: Faker.fake(),
+                content: "{ticket_num} 🧪 {message}".into(),
+            },
+        );
+
+        map
+    }
+
+    fn fake_config() -> Config {
+        Config {
+            commit: CommitConfig {
+                templates: fake_template_config(),
+            },
+        }
     }
 
     fn setup_db(branch: Option<&Branch>) -> anyhow::Result<Connection> {

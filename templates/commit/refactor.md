@@ -1,1 +1,0 @@
-{ticket_num} 🧹 {message}

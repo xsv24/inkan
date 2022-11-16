@@ -20,7 +20,7 @@ impl Git {
 
 impl GitCommands for Git {
     fn get_repo_name(&self) -> anyhow::Result<String> {
-        let repo_dir: String = Git::command(&["rev-parse", "--show-toplevel"]).try_convert()?;
+        let repo_dir = self.root_directory()?;
 
         let repo = repo_dir
             .split('/')
@@ -51,6 +51,12 @@ impl GitCommands for Git {
         Git::command(&["commit", "-m", msg, "-e"]).status()?;
 
         Ok(())
+    }
+
+    fn root_directory(&self) -> anyhow::Result<String> {
+        let dir = Git::command(&["rev-parse", "--show-toplevel"]).try_convert()?;
+
+        Ok(dir.trim().into())
     }
 }
 

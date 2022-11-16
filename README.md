@@ -38,7 +38,19 @@ git-kit --help
 
 ## 🏎️💨 Getting Started
 
-### 🛂 Checkout command
+### ☑ Templates command
+
+Lists currently available commit templates to add your own checkout [Custom Commit templates](#🛠-custom-commit-template-example).
+
+
+```bash
+git-kit templates
+
+- bug |  Fix that resolves an unintended issue
+- ...
+```
+
+### 🏖 Checkout command
 
 Creates or checks out an existing git branch and adds a ticket number as context against that branch for future commits.
 
@@ -59,7 +71,7 @@ git-kit checkout TICKET-123
 ```
 > This will create or checkout a branch `TICKET-123` & link `TICKET-123` as the ticket number context to inject on any future commits on the branch `TICKET-123`.
 
-### 🛂 Context command
+### 🗒 Context command
 
 Create or update context linked to the current checked out branch.
 
@@ -73,7 +85,7 @@ thats created on the linked branch for you automatically!
 git-kit context TICKET-123
 ```
 
-### 🛃 Commit command
+### 💍 Commit command
 
 Commits your changes with a formatted message with your ticket number injected if provided from the [checkout](#checkout-command) or the [context](#context-command) command.
 
@@ -97,12 +109,46 @@ git-kit commit bug -m "fix"
 > `[TICKET-123] 🐛 fix`
 
 
-## ⚙️ Settings 
+## ⚙️ Configuration
 
-```bash
-git-kit --help
+You can provide your own templates simply by creating your own configuration file [.git-kit.yml](.git-kit.yml) within your git repositories root directory.
+
+By default the global configuration templates will be used as shown [here](.git-kit.yml) if no configuration file is present.
+
+### 🛠 Custom Commit template example
+
+Here's an example of a custom template called 'custom'
+
+```yaml
+commit:
+  templates:
+    custom:
+      description: My custom commit template 🎸
+      content: |
+        {ticket_num} 🤘 {message}
 ```
 
-## 🎮 Overriding
+To ensure your template has been loaded simply run 👇 to see a list of the currently configured templates.
 
-Planning on providing a way to configure your own templates at a global or repository level.
+```bash
+git-kit templates
+
+- custom | My custom commit template 🎸
+- ...
+```
+
+Then when your ready use it! 🪂
+
+```bash
+git-kit commit custom \
+ --ticket TICKET-123 \
+ --message "Dang!"
+```
+> [TICKET-123] 🤘 Dang!
+
+
+### 🌏 Global configuration
+
+At the moment the global config is technically can be overridden but I wouldn't recommend it as global config files will be replaced on update to pull any newly added templates.
+
+In the near future we will add a way to configure your own config location to circumvent this issue.
