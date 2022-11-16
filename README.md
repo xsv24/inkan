@@ -40,7 +40,7 @@ git-kit --help
 
 ### ☑ Templates command
 
-Lists currently available commit templates to add your own checkout [Custom Commit templates](#🛠-custom-commit-template-example).
+Lists currently available commit templates to add your own checkout [Custom Commit templates](#-custom-commit-template-example).
 
 
 ```bash
