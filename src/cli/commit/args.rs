@@ -1,4 +1,7 @@
-use crate::{app_context::AppContext, domain::commands::GitCommands, domain::store::Store};
+use crate::{
+    app_context::AppContext, domain::commands::GitCommands, domain::store::Store,
+    utils::string::into_option,
+};
 use clap::Args;
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
@@ -16,18 +19,33 @@ pub struct Arguments {
 }
 
 impl Arguments {
+    fn replace_or_remove(message: String, target: &str, replace: &Option<String>) -> String {
+        let template = format!("{{{}}}", target);
+
+        let message = match replace {
+            Some(value) => {
+                log::info!("replace '{}' from template with '{}'", target, value);
+                message.replace(&template, value)
+            }
+            None => {
+                log::info!("removing '{}' from template", target);
+                message.replace(&template, "")
+            }
+        };
+
+        message.trim().into()
+    }
+
     pub fn commit_message<C: GitCommands, S: Store>(
         &self,
         template: String,
         context: &AppContext<C, S>,
     ) -> anyhow::Result<String> {
+        log::info!("generate commit message for '{}'", template);
         let ticket = self.ticket.as_ref().map(|num| num.trim());
 
         let ticket_num = match ticket {
-            Some(num) => match (num, num.len()) {
-                (_, 0) => None,
-                (value, _) => Some(value.into()),
-            },
+            Some(num) => into_option(num),
             None => context
                 .store
                 .get(
@@ -37,16 +55,12 @@ impl Arguments {
                 .map_or(None, |branch| Some(branch.ticket)),
         };
 
-        let contents = if let Some(ticket) = ticket_num {
-            template.replace("{ticket_num}", &format!("[{}]", ticket))
-        } else {
-            template.replace("{ticket_num}", "").trim().into()
-        };
-
-        let contents = match &self.message {
-            Some(message) => contents.replace("{message}", message),
-            None => contents.replace("{message}", ""),
-        };
+        let contents = Self::replace_or_remove(
+            template,
+            "ticket_num",
+            &ticket_num.map(|t| format!("[{}]", t)),
+        );
+        let contents = Self::replace_or_remove(contents, "message", &self.message);
 
         Ok(contents)
     }
@@ -195,7 +209,7 @@ mod tests {
         let expected = format!("[{}] ", args.ticket.unwrap());
 
         context.close()?;
-        assert_eq!(actual, expected);
+        assert_eq!(expected.trim(), actual);
 
         Ok(())
     }
@@ -225,7 +239,7 @@ mod tests {
         );
 
         context.close()?;
-        assert_eq!(actual, expected);
+        assert_eq!(expected.trim(), actual);
 
         Ok(())
     }

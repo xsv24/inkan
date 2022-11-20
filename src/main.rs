@@ -5,7 +5,9 @@ pub mod config;
 pub mod domain;
 pub mod utils;
 
-use cli::{checkout, commit, context, templates};
+use std::fmt::Debug;
+
+use cli::{checkout, commit, context, log::LogLevel, templates};
 use domain::commands::{CommandActions, GitCommands};
 
 use adapters::{sqlite::Sqlite, Git};
@@ -17,7 +19,7 @@ use rusqlite::Connection;
 
 use crate::config::Config;
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Parser)]
 #[clap(name = "git-kit")]
 #[clap(bin_name = "git-kit")]
 #[clap(about = "git cli containing templates & utilities.", long_about = None)]
@@ -26,6 +28,10 @@ pub struct Cli {
     /// File path to your 'git-kit' config file
     #[clap(short, long)]
     config: Option<String>,
+
+    /// Log level
+    #[clap(arg_enum, long, default_value_t=LogLevel::None)]
+    log: LogLevel,
 
     /// Commands
     #[clap(subcommand)]
@@ -46,6 +52,8 @@ pub enum Commands {
 
 impl Cli {
     fn init(&self) -> anyhow::Result<AppContext<Git, Sqlite>> {
+        self.log.init_logger();
+
         let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
             .context("Failed to retrieve 'git-kit' config")?;
 
@@ -71,6 +79,7 @@ impl Cli {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
     let context = cli.init()?;
     let actions = CommandActions::new(&context);
 

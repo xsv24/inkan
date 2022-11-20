@@ -32,16 +32,21 @@ impl GitCommands for Git {
             .last()
             .context("Failed to get repository name")?;
 
+        log::info!("git repository name '{}'", repo);
+
         Ok(repo.trim().into())
     }
 
     fn get_branch_name(&self) -> anyhow::Result<String> {
         let branch: String = Git::command(&["branch", "--show-current"]).try_convert()?;
+        log::info!("current git branch name '{}'", branch);
 
         Ok(branch)
     }
 
     fn checkout(&self, name: &str, status: CheckoutStatus) -> anyhow::Result<()> {
+        log::info!("checkout '{:?}' branch", status);
+
         let mut command = match status {
             CheckoutStatus::New => Git::command(&["checkout", "-b", name]),
             CheckoutStatus::Existing => Git::command(&["checkout", name]),
@@ -53,6 +58,7 @@ impl GitCommands for Git {
     }
 
     fn commit(&self, msg: &str) -> anyhow::Result<()> {
+        log::info!("git commit with message '{}'", msg);
         Git::command(&["commit", "-m", msg, "-e"]).status()?;
 
         Ok(())
@@ -60,6 +66,7 @@ impl GitCommands for Git {
 
     fn root_directory(&self) -> anyhow::Result<PathBuf> {
         let dir = Git::command(&["rev-parse", "--show-toplevel"]).try_convert()?;
+        log::info!("git root directory {}", dir);
 
         Ok(Path::new(dir.trim()).to_owned())
     }

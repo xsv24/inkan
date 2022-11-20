@@ -7,7 +7,7 @@ use crate::{
 
 use super::{Branch, Store};
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CheckoutStatus {
     New,
     Existing,
@@ -73,7 +73,9 @@ impl<'a, C: GitCommands, S: Store> Commands<C> for CommandActions<'a, C, S> {
             .checkout(&args.name, CheckoutStatus::New);
 
         // If the branch already exists check it out
-        if create.is_err() {
+        if let Err(err) = create {
+            log::error!("failed to create new branch: {}", err);
+
             self.context
                 .commands
                 .checkout(&args.name, CheckoutStatus::Existing)?;
@@ -365,7 +367,7 @@ mod tests {
                 template_contents,
                 args.message.clone().unwrap_or("".into())
             );
-            assert_eq!(expected, contents);
+            assert_eq!(expected.trim(), contents);
 
             context.close()?;
         }
@@ -403,7 +405,7 @@ mod tests {
                 template_contents,
                 args.message.clone().unwrap_or("".into())
             );
-            assert_eq!(expected, contents);
+            assert_eq!(expected.trim(), contents);
 
             context.close()?;
         }

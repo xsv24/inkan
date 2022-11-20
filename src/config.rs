@@ -39,22 +39,26 @@ impl Config {
         Ok(config)
     }
 
-    pub fn validate_template(&self, name: &str) -> clap::Result<()> {
+    pub fn validate_template(&self, name: &str) -> clap::error::Result<()> {
+        log::info!("validating template {}", name);
+
         if self.commit.templates.contains_key(name) {
+            log::info!("template {} 👌", name);
             Ok(())
         } else {
             // TODO: want a nice error message that shows the templates output
             Err(clap::Error::raw(
-                clap::ErrorKind::InvalidSubcommand,
+                clap::error::ErrorKind::InvalidSubcommand,
                 format!("Found invalid subcommand '{}' given", name),
             ))?
         }
     }
 
-    pub fn get_template_config(&self, name: &str) -> clap::Result<&TemplateConfig> {
+    pub fn get_template_config(&self, name: &str) -> clap::error::Result<&TemplateConfig> {
+        log::info!("fetching template {}", name);
         let template = self.commit.templates.get(name).ok_or_else(|| {
             clap::Error::raw(
-                clap::ErrorKind::MissingSubcommand,
+                clap::error::ErrorKind::MissingSubcommand,
                 format!("Found missing subcommand '{}'", name),
             )
         })?;
@@ -72,14 +76,23 @@ impl Config {
         let default_path = default_path.join(filename);
 
         match (user_config, repo_config) {
-            (Some(user), _) => expected_path(&user).map_err(|_| {
-                anyhow::anyhow!(format!(
-                    "Invalid config file path does not exist at '{}'",
-                    &user
-                ))
-            }),
-            (None, repo) if repo.exists() => Ok(repo),
-            (_, _) => Ok(default_path),
+            (Some(user), _) => {
+                log::info!("⏳ Loading user config...");
+                expected_path(&user).map_err(|_| {
+                    anyhow::anyhow!(format!(
+                        "Invalid config file path does not exist at '{}'",
+                        &user
+                    ))
+                })
+            }
+            (None, repo) if repo.exists() => {
+                log::info!("⏳ Loading local repo config...");
+                Ok(repo)
+            }
+            (_, _) => {
+                log::info!("⏳ Loading global config...");
+                Ok(default_path)
+            }
         }
     }
 }

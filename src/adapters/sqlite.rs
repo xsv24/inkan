@@ -33,24 +33,36 @@ impl Sqlite {
 }
 
 impl domain::Store for Sqlite {
-    fn insert_or_update(&self, checkout: &domain::Branch) -> anyhow::Result<()> {
+    fn insert_or_update(&self, branch: &domain::Branch) -> anyhow::Result<()> {
+        log::info!(
+            "insert or update for '{}' branch with ticket '{}'",
+            branch.name,
+            branch.ticket
+        );
+
         self.connection
             .execute(
                 "REPLACE INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
                 (
-                    &checkout.name,
-                    &checkout.ticket,
-                    &checkout.data,
-                    &checkout.created.to_rfc3339(),
+                    &branch.name,
+                    &branch.ticket,
+                    &branch.data,
+                    &branch.created.to_rfc3339(),
                 ),
             )
-            .with_context(|| format!("Failed to insert branch '{}'", &checkout.name))?;
+            .with_context(|| format!("Failed to insert branch '{}'", &branch.name))?;
 
         Ok(())
     }
 
     fn get(&self, branch: &str, repo: &str) -> anyhow::Result<Branch> {
         let name = format!("{}-{}", repo.trim(), branch.trim());
+
+        log::info!(
+            "retrieve branch with ticket for branch '{}' and repo '{}'",
+            name,
+            repo
+        );
 
         let branch = self.connection.query_row(
             "SELECT name, ticket, data, created FROM branch where name = ?",
@@ -62,6 +74,8 @@ impl domain::Store for Sqlite {
     }
 
     fn close(self) -> anyhow::Result<()> {
+        log::info!("closing sqlite connection");
+
         self.connection
             .close()
             .map_err(|_| anyhow!("Failed to close 'git-kit' connection"))?;
