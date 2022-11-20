@@ -1,5 +1,8 @@
 use anyhow::Context;
-use std::process::Command;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use crate::{
     domain::commands::{CheckoutStatus, GitCommands},
@@ -23,6 +26,8 @@ impl GitCommands for Git {
         let repo_dir = self.root_directory()?;
 
         let repo = repo_dir
+            .to_str()
+            .context("Failed to get repository name")?
             .split('/')
             .last()
             .context("Failed to get repository name")?;
@@ -53,10 +58,10 @@ impl GitCommands for Git {
         Ok(())
     }
 
-    fn root_directory(&self) -> anyhow::Result<String> {
+    fn root_directory(&self) -> anyhow::Result<PathBuf> {
         let dir = Git::command(&["rev-parse", "--show-toplevel"]).try_convert()?;
 
-        Ok(dir.trim().into())
+        Ok(Path::new(dir.trim()).to_owned())
     }
 }
 

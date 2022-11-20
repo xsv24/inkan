@@ -6,7 +6,7 @@ pub mod domain;
 pub mod utils;
 
 use cli::{checkout, commit, context, templates};
-use domain::commands::CommandActions;
+use domain::commands::{CommandActions, GitCommands};
 
 use adapters::{sqlite::Sqlite, Git};
 use anyhow::{Context, Ok};
@@ -23,6 +23,11 @@ use crate::config::Config;
 #[clap(about = "git cli containing templates & utilities.", long_about = None)]
 #[clap(version)]
 pub struct Cli {
+    /// File path to your 'git-kit' config file
+    #[clap(short, long)]
+    config: Option<String>,
+
+    /// Commands
     #[clap(subcommand)]
     commands: Commands,
 }
@@ -35,37 +40,45 @@ pub enum Commands {
     Checkout(checkout::Arguments),
     /// Add or update the ticket number related to the current branch.
     Context(context::Arguments),
-    // Display a list of configured templates.
+    /// Display a list of configured templates.
     Templates,
 }
 
-fn init() -> anyhow::Result<(ProjectDirs, Sqlite, Git)> {
-    let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
-        .context("Failed to retrieve 'git-kit' config")?;
+impl Cli {
+    fn init(&self) -> anyhow::Result<AppContext<Git, Sqlite>> {
+        let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
+            .context("Failed to retrieve 'git-kit' config")?;
 
-    let connection = Connection::open(project_dir.config_dir().join("db"))
-        .context("Failed to open sqlite connection")?;
+        let connection = Connection::open(project_dir.config_dir().join("db"))
+            .context("Failed to open sqlite connection")?;
 
-    let store = Sqlite::new(connection).context("Failed to initialize 'Sqlite'")?;
+        let store = Sqlite::new(connection).context("Failed to initialize 'Sqlite'")?;
 
-    Ok((project_dir, store, Git))
+        let git = Git;
+
+        // use custom user config if provided or default.
+        let config = Config::new(
+            self.config.clone(),
+            git.root_directory()?,
+            project_dir.config_dir(),
+        )?;
+
+        let context = AppContext::new(git, store, config)?;
+
+        Ok(context)
+    }
 }
 
 fn main() -> anyhow::Result<()> {
-    let (project_dir, store, git) = init()?;
-
-    let config = Config::new::<Git>(project_dir.config_dir(), &git)?;
-
     let cli = Cli::parse();
-
-    let context = AppContext::new(git, store, project_dir, config.clone())?;
+    let context = cli.init()?;
     let actions = CommandActions::new(&context);
 
     let result = match cli.commands {
         Commands::Checkout(args) => checkout::handler(&actions, args),
         Commands::Context(args) => context::handler(&actions, args),
-        Commands::Commit(args) => commit::handler(&actions, &config, args),
-        Commands::Templates => templates::handler(&config),
+        Commands::Commit(args) => commit::handler(&actions, &context.config, args),
+        Commands::Templates => templates::handler(&context.config),
     };
 
     // close the connection no matter if we error or not.

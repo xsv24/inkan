@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     app_context::AppContext,
     cli::{checkout, commit, context},
@@ -14,7 +16,7 @@ pub enum CheckoutStatus {
 /// Used to abstract cli git commands for testings.
 pub trait GitCommands {
     /// Get the root directory of the current git repo.
-    fn root_directory(&self) -> anyhow::Result<String>;
+    fn root_directory(&self) -> anyhow::Result<PathBuf>;
 
     /// Get the current git repository name.
     fn get_repo_name(&self) -> anyhow::Result<String>;
@@ -31,13 +33,13 @@ pub trait GitCommands {
 
 pub trait Commands<C: GitCommands> {
     /// Actions on a context update on the current branch.
-    fn current(&self, context: context::Arguments) -> anyhow::Result<Branch>;
+    fn current(&self, args: context::Arguments) -> anyhow::Result<Branch>;
 
     /// Actions on a checkout of a new or existing branch.
     fn checkout(&self, args: checkout::Arguments) -> anyhow::Result<Branch>;
 
     /// Actions on a commit.
-    fn commit(&self, template: commit::Arguments) -> anyhow::Result<String>;
+    fn commit(&self, args: commit::Arguments) -> anyhow::Result<String>;
 }
 
 pub struct CommandActions<'a, C: GitCommands, S: Store> {
@@ -51,48 +53,45 @@ impl<'a, C: GitCommands, S: Store> CommandActions<'a, C, S> {
 }
 
 impl<'a, C: GitCommands, S: Store> Commands<C> for CommandActions<'a, C, S> {
-    fn current(&self, context: context::Arguments) -> anyhow::Result<Branch> {
+    fn current(&self, args: context::Arguments) -> anyhow::Result<Branch> {
         // We want to store the branch name against and ticket number
         // So whenever we commit we get the ticket number from the branch
         let repo_name = self.context.commands.get_repo_name()?;
         let branch_name = self.context.commands.get_branch_name()?;
 
-        let branch = Branch::new(&branch_name, &repo_name, Some(context.ticket))?;
+        let branch = Branch::new(&branch_name, &repo_name, Some(args.ticket))?;
         self.context.store.insert_or_update(&branch)?;
 
         Ok(branch)
     }
 
-    fn checkout(&self, checkout: checkout::Arguments) -> anyhow::Result<Branch> {
+    fn checkout(&self, args: checkout::Arguments) -> anyhow::Result<Branch> {
         // Attempt to create branch
         let create = self
             .context
             .commands
-            .checkout(&checkout.name, CheckoutStatus::New);
+            .checkout(&args.name, CheckoutStatus::New);
 
         // If the branch already exists check it out
         if create.is_err() {
             self.context
                 .commands
-                .checkout(&checkout.name, CheckoutStatus::Existing)?;
+                .checkout(&args.name, CheckoutStatus::Existing)?;
         }
 
         // We want to store the branch name against and ticket number
         // So whenever we commit we get the ticket number from the branch
         let repo_name = self.context.commands.get_repo_name()?;
-        let branch = Branch::new(&checkout.name, &repo_name, checkout.ticket.clone())?;
+        let branch = Branch::new(&args.name, &repo_name, args.ticket.clone())?;
         self.context.store.insert_or_update(&branch)?;
 
         Ok(branch)
     }
 
-    fn commit(&self, arguments: commit::Arguments) -> anyhow::Result<String> {
-        let config = self
-            .context
-            .config
-            .get_template_config(&arguments.template)?;
+    fn commit(&self, args: commit::Arguments) -> anyhow::Result<String> {
+        let config = self.context.config.get_template_config(&args.template)?;
 
-        let contents = arguments.commit_message(config.content.clone(), self.context)?;
+        let contents = args.commit_message(config.content.clone(), self.context)?;
 
         self.context.commands.commit(&contents)?;
 
@@ -105,11 +104,8 @@ mod tests {
     use std::collections::HashMap;
 
     use anyhow::anyhow;
-    use anyhow::Context as anyhow_context;
-    use directories::ProjectDirs;
     use fake::{Fake, Faker};
     use rusqlite::Connection;
-    use uuid::Uuid;
 
     use crate::adapters::sqlite::Sqlite;
     use crate::app_context::AppContext;
@@ -415,13 +411,6 @@ mod tests {
         Ok(())
     }
 
-    fn fake_project_dir() -> anyhow::Result<ProjectDirs> {
-        let dirs = ProjectDirs::from(&format!("{}", Uuid::new_v4()), "xsv24", "git-kit")
-            .context("Failed to retrieve 'git-kit' config")?;
-
-        Ok(dirs)
-    }
-
     fn fake_config() -> Config {
         Config {
             commit: CommitConfig {
@@ -433,7 +422,6 @@ mod tests {
     fn fake_context<'a, C: GitCommands>(commands: C) -> anyhow::Result<AppContext<C, Sqlite>> {
         let context = AppContext {
             store: Sqlite::new(Connection::open_in_memory()?)?,
-            project_dir: fake_project_dir()?,
             config: fake_config(),
             commands,
         };
@@ -488,11 +476,10 @@ mod tests {
         }
 
         fn commit(&self, msg: &str) -> anyhow::Result<()> {
-            // assert_eq!(self.expected_commit_msg.clone().expect("commit call was not expected!"), msg);
             (self.commit_res)(msg)
         }
 
-        fn root_directory(&self) -> anyhow::Result<String> {
+        fn root_directory(&self) -> anyhow::Result<PathBuf> {
             todo!()
         }
     }

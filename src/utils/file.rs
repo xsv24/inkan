@@ -1,4 +1,8 @@
-use std::{fs::File, io::Read, path::PathBuf};
+use std::{
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 
@@ -13,4 +17,13 @@ pub fn get_file_contents(path: &PathBuf) -> anyhow::Result<String> {
         .context(format!("Failed to read file at '{}'", file_name))?;
 
     Ok(buff)
+}
+
+pub fn expected_path(path: &str) -> anyhow::Result<PathBuf> {
+    let path = Path::new(path);
+    if path.exists() {
+        Ok(path.to_owned())
+    } else {
+        Err(anyhow::anyhow!("Expected file not found."))
+    }
 }
