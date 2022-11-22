@@ -1,8 +1,8 @@
-use crate::domain::commands::{Commands, GitCommands};
+use crate::domain::commands::Actor;
 
 use super::Arguments;
 
-pub fn handler<C: GitCommands>(actions: &dyn Commands<C>, args: Arguments) -> anyhow::Result<()> {
+pub fn handler(actions: &dyn Actor, args: Arguments) -> anyhow::Result<()> {
     actions.checkout(args)?;
     Ok(())
 }

@@ -8,13 +8,13 @@ pub mod utils;
 use std::fmt::Debug;
 
 use cli::{checkout, commit, context, log::LogLevel, templates};
-use domain::commands::{CommandActions, GitCommands};
 
 use adapters::{sqlite::Sqlite, Git};
 use anyhow::{Context, Ok};
 use app_context::AppContext;
 use clap::{Parser, Subcommand};
 use directories::ProjectDirs;
+use domain::{adapters::Git as _, commands::Actions};
 use rusqlite::Connection;
 
 use crate::config::Config;
@@ -81,7 +81,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let context = cli.init()?;
-    let actions = CommandActions::new(&context);
+    let actions = Actions::new(&context);
 
     let result = match cli.commands {
         Commands::Checkout(args) => checkout::handler(&actions, args),

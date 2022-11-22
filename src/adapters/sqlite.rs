@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use rusqlite::{types::Type, Connection, Row};
 
-use crate::domain::{self, Branch};
+use crate::domain::{self, models::Branch};
 
 pub struct Sqlite {
     connection: Connection,
@@ -32,8 +32,8 @@ impl Sqlite {
     }
 }
 
-impl domain::Store for Sqlite {
-    fn insert_or_update(&self, branch: &domain::Branch) -> anyhow::Result<()> {
+impl domain::adapters::Store for Sqlite {
+    fn insert_or_update(&self, branch: &Branch) -> anyhow::Result<()> {
         log::info!(
             "insert or update for '{}' branch with ticket '{}'",
             branch.name,
@@ -119,7 +119,7 @@ mod tests {
         adapters::Git,
         app_context::AppContext,
         config::{CommitConfig, Config},
-        domain::Store as domain,
+        domain::adapters::Store,
     };
 
     use super::*;
@@ -214,7 +214,7 @@ mod tests {
 
         let context = AppContext {
             store,
-            commands: Git,
+            git: Git,
             config: fake_config(),
         };
 
@@ -249,7 +249,7 @@ mod tests {
         // Arrange
         let context = AppContext {
             store: Sqlite::new(setup_db()?)?,
-            commands: Git,
+            git: Git,
             config: fake_config(),
         };
 

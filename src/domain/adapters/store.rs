@@ -1,4 +1,4 @@
-use super::Branch;
+use crate::domain::models::Branch;
 
 pub trait Store {
     fn insert_or_update(&self, branch: &Branch) -> anyhow::Result<()>;

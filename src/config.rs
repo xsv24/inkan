@@ -103,7 +103,7 @@ mod tests {
     use fake::{Fake, Faker};
     use uuid::Uuid;
 
-    use crate::{adapters::Git, domain::commands::GitCommands};
+    use crate::{adapters::Git, domain::adapters};
 
     use super::*;
 
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn repo_dir_with_config_file_used_over_default() -> anyhow::Result<()> {
-        let git: &dyn GitCommands = &Git;
+        let git: &dyn adapters::Git = &Git;
         let repo_root_with_config = git.root_directory()?;
 
         let config_dir =
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn user_config_file_used_over_repo_and_default() -> anyhow::Result<()> {
-        let git: &dyn GitCommands = &Git;
+        let git: &dyn adapters::Git = &Git;
 
         let user_config = Path::new(".").to_owned();
 
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn invalid_path_for_user_config_file_errors() -> anyhow::Result<()> {
-        let git: &dyn GitCommands = &Git;
+        let git: &dyn adapters::Git = &Git;
 
         let user_config = Path::new(&Faker.fake::<String>()).to_owned();
 

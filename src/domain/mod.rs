@@ -1,6 +1,3 @@
-mod branch;
+pub mod adapters;
 pub mod commands;
-pub mod store;
-
-pub use branch::Branch;
-pub use store::Store;
+pub mod models;

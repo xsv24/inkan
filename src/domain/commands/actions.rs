@@ -1,63 +1,30 @@
-use std::path::PathBuf;
-
 use crate::{
     app_context::AppContext,
     cli::{checkout, commit, context},
+    domain::{
+        adapters::{CheckoutStatus, Git, Store},
+        models::Branch,
+    },
 };
 
-use super::{Branch, Store};
+use super::Actor;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum CheckoutStatus {
-    New,
-    Existing,
-}
-
-/// Used to abstract cli git commands for testings.
-pub trait GitCommands {
-    /// Get the root directory of the current git repo.
-    fn root_directory(&self) -> anyhow::Result<PathBuf>;
-
-    /// Get the current git repository name.
-    fn get_repo_name(&self) -> anyhow::Result<String>;
-
-    /// Get the current checked out branch name.
-    fn get_branch_name(&self) -> anyhow::Result<String>;
-
-    /// Checkout an existing branch of create a new branch if not.
-    fn checkout(&self, name: &str, status: CheckoutStatus) -> anyhow::Result<()>;
-
-    /// Commit changes and open editor with the template.
-    fn commit(&self, msg: &str) -> anyhow::Result<()>;
-}
-
-pub trait Commands<C: GitCommands> {
-    /// Actions on a context update on the current branch.
-    fn current(&self, args: context::Arguments) -> anyhow::Result<Branch>;
-
-    /// Actions on a checkout of a new or existing branch.
-    fn checkout(&self, args: checkout::Arguments) -> anyhow::Result<Branch>;
-
-    /// Actions on a commit.
-    fn commit(&self, args: commit::Arguments) -> anyhow::Result<String>;
-}
-
-pub struct CommandActions<'a, C: GitCommands, S: Store> {
+pub struct Actions<'a, C: Git, S: Store> {
     context: &'a AppContext<C, S>,
 }
 
-impl<'a, C: GitCommands, S: Store> CommandActions<'a, C, S> {
-    pub fn new(context: &AppContext<C, S>) -> CommandActions<C, S> {
-        CommandActions { context }
+impl<'a, C: Git, S: Store> Actions<'a, C, S> {
+    pub fn new(context: &AppContext<C, S>) -> Actions<C, S> {
+        Actions { context }
     }
 }
 
-impl<'a, C: GitCommands, S: Store> Commands<C> for CommandActions<'a, C, S> {
+impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
     fn current(&self, args: context::Arguments) -> anyhow::Result<Branch> {
         // We want to store the branch name against and ticket number
         // So whenever we commit we get the ticket number from the branch
-        let repo_name = self.context.commands.get_repo_name()?;
-        let branch_name = self.context.commands.get_branch_name()?;
+        let repo_name = self.context.git.get_repo_name()?;
+        let branch_name = self.context.git.get_branch_name()?;
 
         let branch = Branch::new(&branch_name, &repo_name, Some(args.ticket))?;
         self.context.store.insert_or_update(&branch)?;
@@ -67,23 +34,20 @@ impl<'a, C: GitCommands, S: Store> Commands<C> for CommandActions<'a, C, S> {
 
     fn checkout(&self, args: checkout::Arguments) -> anyhow::Result<Branch> {
         // Attempt to create branch
-        let create = self
-            .context
-            .commands
-            .checkout(&args.name, CheckoutStatus::New);
+        let create = self.context.git.checkout(&args.name, CheckoutStatus::New);
 
         // If the branch already exists check it out
         if let Err(err) = create {
             log::error!("failed to create new branch: {}", err);
 
             self.context
-                .commands
+                .git
                 .checkout(&args.name, CheckoutStatus::Existing)?;
         }
 
         // We want to store the branch name against and ticket number
         // So whenever we commit we get the ticket number from the branch
-        let repo_name = self.context.commands.get_repo_name()?;
+        let repo_name = self.context.git.get_repo_name()?;
         let branch = Branch::new(&args.name, &repo_name, args.ticket.clone())?;
         self.context.store.insert_or_update(&branch)?;
 
@@ -95,7 +59,7 @@ impl<'a, C: GitCommands, S: Store> Commands<C> for CommandActions<'a, C, S> {
 
         let contents = args.commit_message(config.content.clone(), self.context)?;
 
-        self.context.commands.commit(&contents)?;
+        self.context.git.commit(&contents)?;
 
         Ok(contents)
     }
@@ -104,6 +68,7 @@ impl<'a, C: GitCommands, S: Store> Commands<C> for CommandActions<'a, C, S> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::path::PathBuf;
 
     use anyhow::anyhow;
     use fake::{Fake, Faker};
@@ -114,7 +79,7 @@ mod tests {
     use crate::config::CommitConfig;
     use crate::config::Config;
     use crate::config::TemplateConfig;
-    use crate::domain::Store;
+    use crate::domain::adapters::CheckoutStatus;
 
     use super::*;
 
@@ -135,7 +100,7 @@ mod tests {
         };
 
         let context = fake_context(git_commands.clone())?;
-        let actions = CommandActions::new(&context);
+        let actions = Actions::new(&context);
 
         // Act
         actions.checkout(command.clone())?;
@@ -180,7 +145,7 @@ mod tests {
         };
 
         let context = fake_context(git_commands.clone())?;
-        let actions = CommandActions::new(&context);
+        let actions = Actions::new(&context);
 
         // Act
         actions.checkout(command.clone())?;
@@ -218,7 +183,7 @@ mod tests {
         };
 
         let context = fake_context(git_commands.clone())?;
-        let actions = CommandActions::new(&context);
+        let actions = Actions::new(&context);
 
         // Act
         let result = actions.checkout(command.clone());
@@ -255,7 +220,7 @@ mod tests {
         };
 
         let context = fake_context(git_commands.clone())?;
-        let actions = CommandActions::new(&context);
+        let actions = Actions::new(&context);
 
         // Act
         actions.checkout(command.clone())?;
@@ -292,7 +257,7 @@ mod tests {
         };
 
         let context = fake_context(git_commands.clone())?;
-        let actions = CommandActions::new(&context);
+        let actions = Actions::new(&context);
 
         // Act
         actions.current(command.clone())?;
@@ -323,7 +288,7 @@ mod tests {
 
         for (template_contents, args) in fake_commit_args(Some(args)) {
             let context = fake_context(GitCommandMock::fake())?;
-            let actions = CommandActions::new(&context);
+            let actions = Actions::new(&context);
 
             // Act
             let contents = actions
@@ -354,7 +319,7 @@ mod tests {
 
         for (template_contents, args) in fake_commit_args(Some(args)) {
             let context = fake_context(GitCommandMock::fake())?;
-            let actions = CommandActions::new(&context);
+            let actions = Actions::new(&context);
 
             // Act
             let contents = actions
@@ -384,10 +349,10 @@ mod tests {
 
         for (template_contents, args) in fake_commit_args(Some(args)) {
             let context = fake_context(GitCommandMock::fake())?;
-            let actions = CommandActions::new(&context);
+            let actions = Actions::new(&context);
 
-            let branch_name = context.commands.get_branch_name()?;
-            let repo_name = context.commands.get_repo_name()?;
+            let branch_name = context.git.get_branch_name()?;
+            let repo_name = context.git.get_repo_name()?;
             setup_db(
                 &context.store,
                 Some(&fake_branch(Some(branch_name.clone()), Some(repo_name))?),
@@ -421,11 +386,11 @@ mod tests {
         }
     }
 
-    fn fake_context<'a, C: GitCommands>(commands: C) -> anyhow::Result<AppContext<C, Sqlite>> {
+    fn fake_context<'a, C: Git>(git: C) -> anyhow::Result<AppContext<C, Sqlite>> {
         let context = AppContext {
             store: Sqlite::new(Connection::open_in_memory()?)?,
             config: fake_config(),
-            commands,
+            git,
         };
 
         Ok(context)
@@ -458,7 +423,7 @@ mod tests {
         }
     }
 
-    impl GitCommands for GitCommandMock {
+    impl Git for GitCommandMock {
         fn get_repo_name(&self) -> anyhow::Result<String> {
             self.repo
                 .as_ref()

@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    domain::commands::{CheckoutStatus, GitCommands},
+    domain::adapters::{self, CheckoutStatus},
     utils::TryConvert,
 };
 
@@ -21,7 +21,7 @@ impl Git {
     }
 }
 
-impl GitCommands for Git {
+impl adapters::Git for Git {
     fn get_repo_name(&self) -> anyhow::Result<String> {
         let repo_dir = self.root_directory()?;
 
@@ -74,6 +74,8 @@ impl GitCommands for Git {
 
 #[cfg(test)]
 mod tests {
+    use crate::domain::adapters::Git;
+
     use super::*;
 
     #[test]
