@@ -27,7 +27,7 @@ impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
         let branch_name = self.context.git.get_branch_name()?;
 
         let branch = Branch::new(&branch_name, &repo_name, Some(args.ticket))?;
-        self.context.store.insert_or_update(&branch)?;
+        self.context.store.persist_branch(&branch)?;
 
         Ok(branch)
     }
@@ -49,7 +49,7 @@ impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
         // So whenever we commit we get the ticket number from the branch
         let repo_name = self.context.git.get_repo_name()?;
         let branch = Branch::new(&args.name, &repo_name, args.ticket.clone())?;
-        self.context.store.insert_or_update(&branch)?;
+        self.context.store.persist_branch(&branch)?;
 
         Ok(branch)
     }
@@ -72,12 +72,13 @@ mod tests {
 
     use anyhow::anyhow;
     use fake::{Fake, Faker};
+    use migrations::db_migrations;
     use rusqlite::Connection;
 
     use crate::adapters::sqlite::Sqlite;
     use crate::app_context::AppContext;
+    use crate::config::AppConfig;
     use crate::config::CommitConfig;
-    use crate::config::Config;
     use crate::config::TemplateConfig;
     use crate::domain::adapters::CheckoutStatus;
 
@@ -106,7 +107,7 @@ mod tests {
         actions.checkout(command.clone())?;
 
         // Assert
-        let branch = context.store.get(&command.name, &repo)?;
+        let branch = context.store.get_branch(&command.name, &repo)?;
         let name = format!(
             "{}-{}",
             &git_commands.repo.unwrap(),
@@ -151,7 +152,7 @@ mod tests {
         actions.checkout(command.clone())?;
 
         // Assert
-        let branch = context.store.get(&command.name, &repo)?;
+        let branch = context.store.get_branch(&command.name, &repo)?;
         let name = format!(
             "{}-{}",
             &git_commands.repo.unwrap(),
@@ -193,7 +194,7 @@ mod tests {
 
         let error = context
             .store
-            .get(&command.name, &repo)
+            .get_branch(&command.name, &repo)
             .expect_err("Expected error as there should be no stored branches.");
 
         assert_eq!(error.to_string(), "Query returned no rows");
@@ -226,7 +227,7 @@ mod tests {
         actions.checkout(command.clone())?;
 
         // Assert
-        let branch = context.store.get(&command.name, &repo)?;
+        let branch = context.store.get_branch(&command.name, &repo)?;
         let name = format!(
             "{}-{}",
             &git_commands.repo.unwrap(),
@@ -263,7 +264,7 @@ mod tests {
         actions.current(command.clone())?;
 
         // Assert
-        let branch = context.store.get(&branch_name, &repo)?;
+        let branch = context.store.get_branch(&branch_name, &repo)?;
         let name = format!(
             "{}-{}",
             &git_commands.repo.unwrap(),
@@ -378,8 +379,8 @@ mod tests {
         Ok(())
     }
 
-    fn fake_config() -> Config {
-        Config {
+    fn fake_config() -> AppConfig {
+        AppConfig {
             commit: CommitConfig {
                 templates: fake_template_config(),
             },
@@ -387,8 +388,18 @@ mod tests {
     }
 
     fn fake_context<'a, C: Git>(git: C) -> anyhow::Result<AppContext<C, Sqlite>> {
+        let mut connection = Connection::open_in_memory()?;
+        db_migrations(
+            &mut connection,
+            migrations::MigrationContext {
+                config_path: PathBuf::new(),
+                enable_side_effects: false,
+                version: None,
+            },
+        )?;
+
         let context = AppContext {
-            store: Sqlite::new(Connection::open_in_memory()?)?,
+            store: Sqlite::new(connection)?,
             config: fake_config(),
             git,
         };
@@ -398,7 +409,7 @@ mod tests {
 
     fn setup_db(store: &Sqlite, branch: Option<&Branch>) -> anyhow::Result<()> {
         if let Some(branch) = branch {
-            store.insert_or_update(branch.into())?;
+            store.persist_branch(branch.into())?;
         }
 
         Ok(())

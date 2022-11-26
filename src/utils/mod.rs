@@ -1,4 +1,4 @@
-mod file;
+pub mod file;
 pub mod string;
 mod try_convert;
 

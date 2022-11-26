@@ -1,8 +1,8 @@
-use crate::{config::Config, domain::commands::Actor};
+use crate::{config::AppConfig, domain::commands::Actor};
 
 use super::Arguments;
 
-pub fn handler(actions: &dyn Actor, config: &Config, args: Arguments) -> anyhow::Result<()> {
+pub fn handler(actions: &dyn Actor, config: &AppConfig, args: Arguments) -> anyhow::Result<()> {
     config.validate_template(&args.template)?;
     actions.commit(args)?;
 

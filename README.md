@@ -50,7 +50,7 @@ git-kit templates
 - ...
 ```
 
-### 🏖 Checkout command
+### 🎟️ Checkout command
 
 Creates or checks out an existing git branch and adds a ticket number as context against that branch for future commits.
 
@@ -71,23 +71,23 @@ git-kit checkout TICKET-123
 ```
 > This will create or checkout a branch `TICKET-123` & link `TICKET-123` as the ticket number context to inject on any future commits on the branch `TICKET-123`.
 
-### 🗒 Context command
+### 🔗 Context command
 
 Create or update context linked to the current checked out branch.
 
-This is handy if you forgot to checkout by the provided `git-kit` [checkout command](#checkout-command) or if you've made a typo
+This is handy if you forgot to checkout by the provided `git-kit` [checkout command](#-checkout-command) or if you've made a typo
 in on the provided ticket number.
 
-Again when it's time to [commit](#commit-command) your changes the provided ticket number will be injected into each commit message </br>
+Again when it's time to [commit](#-commit-command) your changes the provided ticket number will be injected into each commit message </br>
 thats created on the linked branch for you automatically! 
 
 ```bash
 git-kit context TICKET-123
 ```
 
-### 💍 Commit command
+### 🚀 Commit command
 
-Commits your changes with a formatted message with your ticket number injected if provided from the [checkout](#checkout-command) or the [context](#context-command) command.
+Commits your changes with a formatted message with your ticket number injected if provided from the [checkout](#-checkout-command) or the [context](#-context-command) command.
 
 When committing you can specify a template to use to help describe the changes made within your commit.
 
@@ -111,9 +111,38 @@ git-kit commit bug -m "fix"
 
 ## ⚙️ Configuration
 
-You can provide your own templates simply by creating your own configuration file [.git-kit.yml](.git-kit.yml) within your git repositories root directory.
+You can provide your own templates simply by creating your own configuration file [.git-kit.yml](.git-kit.yml), this can be provided to the cli in one of the following ways.
 
-By default the global configuration templates will be used as shown [here](.git-kit.yml) if no configuration file is present.
+- Provide a config file path via `--config` option.
+- Create a `.git-kit.yml` config file within your git repositories root directory.
+- Use a config file previously added / linked via `config add` subcommand as highlighted in the [persist configuration guide](#persist-configuration).
+
+Otherwise the [default configuration](.git-kit.yml) will be used. The default config file can also be customized but it's not recommend as the templates could be replaced on any new releases.
+
+
+### Persist Configuration
+
+Persisting / linking your own config file can be done by providing the file path to your config file and a reference name.
+
+```bash
+git-kit config add $CONFIG_NAME $CONFIG_PATH
+```
+
+You can add multiple config files and switch between them via `set` command.
+
+```bash
+git-kit config set $CONFIG_NAME
+```
+
+If you wish to return to the `default` provided templates you can run one of the following commands.
+
+```bash
+git-kit config set default
+```
+
+```bash
+git-kit config reset
+```
 
 ### 🛠 Custom Commit template example
 
@@ -145,10 +174,3 @@ git-kit commit custom \
  --message "Dang!"
 ```
 > [TICKET-123] 🤘 Dang!
-
-
-### 🌏 Global configuration
-
-At the moment the global config is technically can be overridden but I wouldn't recommend it as global config files will be replaced on update to pull any newly added templates.
-
-In the near future we will add a way to configure your own config location to circumvent this issue.

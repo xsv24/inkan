@@ -1,0 +1,16 @@
+[package]
+name = "migrations"
+version = "0.0.1"
+edition = "2021"
+authors = ["Thomas Pearson thomaspearson.dev@gmail.com"]
+license = "MIT"
+description = "git-kit migrations."
+readme = "README.md"
+homepage = "https://github.com/xsv24/git-kit"
+repository = "https://github.com/xsv24/git-kit"
+
+[dependencies]
+anyhow = "1.0"
+directories = { version = "4.0.1" }
+rusqlite = { version = "0.28.0", features = ["bundled"] }
+rusqlite_migration = "1.0.1"

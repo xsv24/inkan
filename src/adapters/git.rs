@@ -23,11 +23,9 @@ impl Git {
 
 impl adapters::Git for Git {
     fn get_repo_name(&self) -> anyhow::Result<String> {
-        let repo_dir = self.root_directory()?;
+        let repo_dir = self.root_directory()?.try_convert()?;
 
         let repo = repo_dir
-            .to_str()
-            .context("Failed to get repository name")?
             .split('/')
             .last()
             .context("Failed to get repository name")?;

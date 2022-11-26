@@ -1,6 +1,6 @@
 [package]
 name = "git-kit"
-version = "0.0.10"
+version = "0.0.11"
 edition = "2021"
 authors = ["Thomas Pearson thomaspearson.dev@gmail.com"]
 license = "MIT"
@@ -30,6 +30,9 @@ uuid = { version = "1.1.2", features = [ "v4" ] }
 
 [dev-dependencies]
 fake = { version = "2.5.0" }
+migrations = { path = "./migrations" }
 
 [build-dependencies]
 directories = { version = "4.0.1" }
+rusqlite = { version = "0.28.0", features = ["bundled"] }
+migrations = { path = "./migrations" }

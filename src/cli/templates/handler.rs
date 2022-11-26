@@ -1,8 +1,8 @@
 use colored::Colorize;
 
-use crate::config::Config;
+use crate::config::AppConfig;
 
-pub fn handler(config: &Config) -> anyhow::Result<()> {
+pub fn handler(config: &AppConfig) -> anyhow::Result<()> {
     log::info!("collect commit templates from config.");
     let mut pairs = config
         .commit

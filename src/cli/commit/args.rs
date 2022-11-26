@@ -49,7 +49,7 @@ impl Arguments {
             Some(num) => into_option(num),
             None => context
                 .store
-                .get(
+                .get_branch(
                     &context.git.get_branch_name()?,
                     &context.git.get_repo_name()?,
                 )
@@ -73,7 +73,7 @@ mod tests {
 
     use crate::{
         adapters::sqlite::Sqlite,
-        config::{CommitConfig, Config, TemplateConfig},
+        config::{AppConfig, CommitConfig, TemplateConfig},
         domain::{adapters::CheckoutStatus, models::Branch},
     };
     use fake::{Fake, Faker};
@@ -374,8 +374,8 @@ mod tests {
         map
     }
 
-    fn fake_config() -> Config {
-        Config {
+    fn fake_config() -> AppConfig {
+        AppConfig {
             commit: CommitConfig {
                 templates: fake_template_config(),
             },

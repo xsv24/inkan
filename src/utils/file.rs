@@ -6,8 +6,10 @@ use std::{
 
 use anyhow::Context;
 
+use super::TryConvert;
+
 pub fn get_file_contents(path: &PathBuf) -> anyhow::Result<String> {
-    let file_name = path.as_os_str().to_str().unwrap_or_default();
+    let file_name = path.try_convert().unwrap_or_default();
     let mut buff = String::new();
 
     let mut reader = File::open(path).context(format!("Failed to open file at '{}'", file_name))?;

@@ -13,11 +13,13 @@ use adapters::{sqlite::Sqlite, Git};
 use anyhow::{Context, Ok};
 use app_context::AppContext;
 use clap::{Parser, Subcommand};
-use directories::ProjectDirs;
-use domain::{adapters::Git as _, commands::Actions};
-use rusqlite::Connection;
+use domain::{
+    adapters::{Git as _, Store},
+    commands::Actions,
+    models::{Config, ConfigKey, ConfigStatus},
+};
 
-use crate::config::Config;
+use crate::config::AppConfig;
 
 #[derive(Debug, Parser)]
 #[clap(name = "git-kit")]
@@ -46,6 +48,9 @@ pub enum Commands {
     Checkout(checkout::Arguments),
     /// Add or update the ticket number related to the current branch.
     Context(context::Arguments),
+    /// Get or Set persisted configuration file path.
+    #[clap(subcommand)]
+    Config(cli::config::Arguments),
     /// Display a list of configured templates.
     Templates,
 }
@@ -54,22 +59,18 @@ impl Cli {
     fn init(&self) -> anyhow::Result<AppContext<Git, Sqlite>> {
         self.log.init_logger();
 
-        let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
-            .context("Failed to retrieve 'git-kit' config")?;
-
-        let connection = Connection::open(project_dir.config_dir().join("db"))
-            .context("Failed to open sqlite connection")?;
-
-        let store = Sqlite::new(connection).context("Failed to initialize 'Sqlite'")?;
+        let store =
+            Sqlite::new(AppConfig::db_connection()?).context("Failed to initialize 'Sqlite'")?;
 
         let git = Git;
 
+        let config = match &self.config {
+            Some(path) => Config::new(ConfigKey::Once, path.into(), ConfigStatus::ACTIVE),
+            None => store.get_config(None),
+        }?;
+
         // use custom user config if provided or default.
-        let config = Config::new(
-            self.config.clone(),
-            git.root_directory()?,
-            project_dir.config_dir(),
-        )?;
+        let config = AppConfig::new(config, git.root_directory()?)?;
 
         let context = AppContext::new(git, store, config)?;
 
@@ -80,13 +81,14 @@ impl Cli {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let context = cli.init()?;
+    let mut context = cli.init()?;
     let actions = Actions::new(&context);
 
     let result = match cli.commands {
         Commands::Checkout(args) => checkout::handler(&actions, args),
         Commands::Context(args) => context::handler(&actions, args),
         Commands::Commit(args) => commit::handler(&actions, &context.config, args),
+        Commands::Config(args) => cli::config::handler(&mut context.store, args),
         Commands::Templates => templates::handler(&context.config),
     };
 
