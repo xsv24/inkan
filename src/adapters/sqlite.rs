@@ -92,11 +92,17 @@ impl domain::adapters::Store for Sqlite {
 
     fn set_active_config(&mut self, key: ConfigKey) -> anyhow::Result<Config> {
         let transaction = self.transaction()?;
+        let key: String = key.into();
 
         let (active, disabled) = (
             String::from(ConfigStatus::Active),
             String::from(ConfigStatus::Disabled),
         );
+
+        // Check the record actually exists before changing statuses.
+        transaction
+            .query_row("SELECT * FROM config where key = ?1;", [&key], |_| Ok(()))
+            .with_context(|| format!("Configuration '{}' does not exist.", &key))?;
 
         // Update any 'ACTIVE' config to 'DISABLED'
         transaction
@@ -105,8 +111,6 @@ impl domain::adapters::Store for Sqlite {
                 (&disabled, &active),
             )
             .with_context(|| format!("Failed to set any '{}' config to '{}'.", disabled, active))?;
-
-        let key: String = key.into();
 
         // Update the desired config to 'ACTIVE'
         transaction
@@ -478,7 +482,28 @@ mod tests {
     }
 
     #[test]
-    fn set_active_config_sets_any_active_configs_inactive() -> anyhow::Result<()> {
+    fn set_active_checks_row_exists_before_clearing_status() -> anyhow::Result<()> {
+        let connection = setup_db()?;
+        let mut store = Sqlite::new(connection)?;
+
+        let active_config = Config {
+            status: ConfigStatus::Active,
+            ..fake_config()
+        };
+
+        insert_config(&store.connection, &active_config)?;
+
+        let result = store.set_active_config(ConfigKey::User(Faker.fake()));
+        assert!(result.is_err());
+
+        let default = store.get_config(Some(active_config.key.clone().into()))?;
+        assert_eq!(active_config.key, default.key);
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_active_config_sets_any_active_configs_to_disabled() -> anyhow::Result<()> {
         let connection = setup_db()?;
 
         for _ in 0..(2..10).fake() {
