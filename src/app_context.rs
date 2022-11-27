@@ -1,5 +1,5 @@
 use crate::{
-    config::AppConfig,
+    app_config::AppConfig,
     domain::adapters::{Git, Store},
 };
 

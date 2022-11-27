@@ -11,6 +11,7 @@ pub struct MigrationContext {
     pub version: Option<usize>,
 }
 
+#[allow(dead_code)]
 pub fn db_migrations(
     connection: &mut Connection,
     context: MigrationContext,
@@ -73,7 +74,7 @@ mod tests {
     use rusqlite::Connection;
     use std::path::Path;
 
-    use crate::{db_migrations, MigrationContext};
+    use crate::migrations::{db_migrations, MigrationContext};
 
     fn arrange(version: usize) -> (Connection, Vec<String>, MigrationContext) {
         let mut connection = Connection::open_in_memory().unwrap();

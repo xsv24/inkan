@@ -130,7 +130,7 @@ mod tests {
             Config {
                 key: ConfigKey::Once,
                 path: once_path.clone(),
-                status: ConfigStatus::ACTIVE,
+                status: ConfigStatus::Active,
             },
             valid_repo_dir,
         )?;
@@ -150,7 +150,7 @@ mod tests {
                 Config {
                     key,
                     path: fake_path_buf(),
-                    status: ConfigStatus::ACTIVE,
+                    status: ConfigStatus::Active,
                 },
                 repo_root_with_config.clone(),
             )?;
@@ -169,7 +169,7 @@ mod tests {
             Config {
                 key: ConfigKey::User(Faker.fake()),
                 path: user_path.clone(),
-                status: ConfigStatus::ACTIVE,
+                status: ConfigStatus::Active,
             },
             repo_non_existing,
         )?;
@@ -188,7 +188,7 @@ mod tests {
             Config {
                 key: ConfigKey::Default,
                 path: default_path.clone(),
-                status: ConfigStatus::ACTIVE,
+                status: ConfigStatus::Active,
             },
             repo_non_existing,
         )?;

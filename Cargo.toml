@@ -26,13 +26,14 @@ serde_yaml = "0.9"
 chrono = { version = "0.4.22" }
 directories = { version = "4.0.1" }
 rusqlite = { version = "0.28.0", features = ["bundled"] }
+rusqlite_migration = "1.0.1"
 uuid = { version = "1.1.2", features = [ "v4" ] }
 
 [dev-dependencies]
 fake = { version = "2.5.0" }
-migrations = { path = "./migrations" }
 
 [build-dependencies]
+anyhow = "1.0"
 directories = { version = "4.0.1" }
 rusqlite = { version = "0.28.0", features = ["bundled"] }
-migrations = { path = "./migrations" }
+rusqlite_migration = "1.0.1"

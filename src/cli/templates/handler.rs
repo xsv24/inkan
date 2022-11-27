@@ -1,6 +1,6 @@
 use colored::Colorize;
 
-use crate::config::AppConfig;
+use crate::app_config::AppConfig;
 
 pub fn handler(config: &AppConfig) -> anyhow::Result<()> {
     log::info!("collect commit templates from config.");

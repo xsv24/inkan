@@ -1,3 +1,7 @@
+// Imported manually overwise we need a separate sub crate thats published.
+#[path = "src/migrations.rs"]
+mod migrations;
+
 use std::{
     env, fs, io,
     path::{Path, PathBuf},

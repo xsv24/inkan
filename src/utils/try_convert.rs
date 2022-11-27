@@ -1,4 +1,5 @@
 use std::{
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -38,9 +39,11 @@ impl TryConvert<String> for &PathBuf {
 impl TryConvert<PathBuf> for String {
     fn try_convert(self) -> anyhow::Result<PathBuf> {
         let path = Path::new(&self);
+        let absolute_path =
+            fs::canonicalize(path).context("Failed to convert to an absolute path")?;
 
-        if path.exists() {
-            Ok(path.to_owned())
+        if absolute_path.exists() {
+            Ok(absolute_path)
         } else {
             Err(anyhow::anyhow!("Expected file not found."))
         }

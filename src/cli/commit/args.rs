@@ -73,7 +73,7 @@ mod tests {
 
     use crate::{
         adapters::sqlite::Sqlite,
-        config::{AppConfig, CommitConfig, TemplateConfig},
+        app_config::{AppConfig, CommitConfig, TemplateConfig},
         domain::{adapters::CheckoutStatus, models::Branch},
     };
     use fake::{Fake, Faker};

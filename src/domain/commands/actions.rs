@@ -72,15 +72,16 @@ mod tests {
 
     use anyhow::anyhow;
     use fake::{Fake, Faker};
-    use migrations::db_migrations;
     use rusqlite::Connection;
 
     use crate::adapters::sqlite::Sqlite;
+    use crate::app_config::AppConfig;
+    use crate::app_config::CommitConfig;
+    use crate::app_config::TemplateConfig;
     use crate::app_context::AppContext;
-    use crate::config::AppConfig;
-    use crate::config::CommitConfig;
-    use crate::config::TemplateConfig;
+
     use crate::domain::adapters::CheckoutStatus;
+    use crate::migrations::{db_migrations, MigrationContext};
 
     use super::*;
 
@@ -391,7 +392,7 @@ mod tests {
         let mut connection = Connection::open_in_memory()?;
         db_migrations(
             &mut connection,
-            migrations::MigrationContext {
+            MigrationContext {
                 config_path: PathBuf::new(),
                 enable_side_effects: false,
                 version: None,

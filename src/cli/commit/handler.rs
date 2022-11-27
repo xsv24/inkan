@@ -1,4 +1,4 @@
-use crate::{config::AppConfig, domain::commands::Actor};
+use crate::{app_config::AppConfig, domain::commands::Actor};
 
 use super::Arguments;
 

@@ -30,7 +30,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: -p git-kit -p migrations -- --show-output
+          args: -- --show-output
 
   fmt:
     name: fmt
