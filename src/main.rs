@@ -67,7 +67,7 @@ impl Cli {
 
         let config = match &self.config {
             Some(path) => Config::new(ConfigKey::Once, path.into(), ConfigStatus::Active),
-            None => store.get_config(None),
+            None => store.get_configuration(None),
         }?;
 
         // use custom user config if provided or default.
@@ -89,7 +89,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Checkout(args) => checkout::handler(&actions, args),
         Commands::Context(args) => context::handler(&actions, args),
         Commands::Commit(args) => commit::handler(&actions, &context.config, args),
-        Commands::Config(args) => cli::config::handler(&mut context.store, args),
+        Commands::Config(args) => cli::config::handler(&mut context.store, &context.git, args),
         Commands::Templates => templates::handler(&context.config),
     };
 

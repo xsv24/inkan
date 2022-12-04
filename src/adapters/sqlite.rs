@@ -124,10 +124,10 @@ impl domain::adapters::Store for Sqlite {
             .commit()
             .context("Failed to commit transaction to update config")?;
 
-        self.get_config(Some(key))
+        self.get_configuration(Some(key))
     }
 
-    fn get_config(&self, key: Option<String>) -> anyhow::Result<Config> {
+    fn get_configuration(&self, key: Option<String>) -> anyhow::Result<Config> {
         let config = match key {
             Some(key) => {
                 self.connection
@@ -143,6 +143,20 @@ impl domain::adapters::Store for Sqlite {
         }?;
 
         Ok(config)
+    }
+
+    fn get_configurations(&self) -> anyhow::Result<Vec<Config>> {
+        let mut statement = self.connection.prepare("SELECT * FROM config")?;
+
+        let configs: Vec<_> = statement
+            .query_map([], |row| {
+                let config = Config::try_from(row)?;
+                Ok(config)
+            })?
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+
+        Ok(configs)
     }
 
     fn close(self) -> anyhow::Result<()> {
@@ -426,6 +440,26 @@ mod tests {
     }
 
     #[test]
+    fn get_list_of_registered_configs() -> anyhow::Result<()> {
+        // Arrange
+        let connection = setup_db()?;
+        let expected = vec![fake_config(), fake_config(), fake_config()];
+
+        for config in &expected {
+            insert_config(&connection, config)?;
+        }
+
+        let store = Sqlite::new(connection)?;
+
+        // Act
+        let configs = store.get_configurations()?;
+
+        assert_eq!(expected, configs);
+
+        Ok(())
+    }
+
+    #[test]
     fn get_config_by_key_success() -> anyhow::Result<()> {
         // Arrange
         let expected = fake_config();
@@ -435,7 +469,9 @@ mod tests {
         let store = Sqlite::new(connection)?;
 
         // Act
-        let config = store.get_config(Some(expected.key.clone().into())).unwrap();
+        let config = store
+            .get_configuration(Some(expected.key.clone().into()))
+            .unwrap();
 
         // Assert
         assert_eq!(1, config_count(&store.connection)?);
@@ -455,7 +491,7 @@ mod tests {
         let store = Sqlite::new(connection)?;
 
         // Act
-        let config = store.get_config(None).unwrap();
+        let config = store.get_configuration(None).unwrap();
 
         // Assert
         assert_eq!(1, config_count(&store.connection)?);
@@ -496,7 +532,7 @@ mod tests {
         let result = store.set_active_config(ConfigKey::User(Faker.fake()));
         assert!(result.is_err());
 
-        let default = store.get_config(Some(active_config.key.clone().into()))?;
+        let default = store.get_configuration(Some(active_config.key.clone().into()))?;
         assert_eq!(active_config.key, default.key);
 
         Ok(())

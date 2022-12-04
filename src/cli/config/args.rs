@@ -10,7 +10,7 @@ pub enum Arguments {
     /// Switch to another config file.
     Set {
         /// Name used to reference the config file.
-        name: String,
+        name: Option<String>,
     },
     /// Display the current config in use.
     Show,

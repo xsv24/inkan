@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use directories::ProjectDirs;
@@ -79,9 +82,13 @@ impl AppConfig {
         Ok(template)
     }
 
-    fn get_config_path(config: Config, repo_config: PathBuf) -> anyhow::Result<PathBuf> {
+    pub fn join_config_filename(repo_config: &Path) -> PathBuf {
         let filename = ".git-kit.yml";
-        let repo_config = repo_config.join(filename);
+        repo_config.join(filename)
+    }
+
+    fn get_config_path(config: Config, repo_config: PathBuf) -> anyhow::Result<PathBuf> {
+        let repo_config = AppConfig::join_config_filename(&repo_config);
 
         match (config.key, repo_config.exists()) {
             // Once off override takes priority 1
@@ -90,7 +97,7 @@ impl AppConfig {
                 Ok(config.path)
             }
             // Repository has config file priority 2
-            (_, true) => {
+            (ConfigKey::Local, _) | (_, true) => {
                 log::info!("⏳ Loading local repo config...");
                 Ok(repo_config)
             }

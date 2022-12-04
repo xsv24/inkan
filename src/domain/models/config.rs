@@ -6,7 +6,7 @@ use crate::{domain::models::ConfigStatus, utils::TryConvert};
 
 use super::ConfigKey;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub key: ConfigKey,
     pub path: PathBuf,

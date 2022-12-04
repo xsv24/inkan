@@ -9,7 +9,9 @@ pub trait Store {
 
     fn set_active_config(&mut self, key: ConfigKey) -> anyhow::Result<Config>;
 
-    fn get_config(&self, key: Option<String>) -> anyhow::Result<Config>;
+    fn get_configurations(&self) -> anyhow::Result<Vec<Config>>;
+
+    fn get_configuration(&self, key: Option<String>) -> anyhow::Result<Config>;
 
     fn close(self) -> anyhow::Result<()>;
 }

@@ -1,6 +1,6 @@
 [package]
 name = "git-kit"
-version = "0.0.12"
+version = "0.0.13"
 edition = "2021"
 authors = ["Thomas Pearson thomaspearson.dev@gmail.com"]
 license = "MIT"
@@ -19,6 +19,7 @@ build = "build.rs"
 anyhow = "1.0"
 colored = "2"
 clap = { version = "3.2.17", features = ["derive"] }
+inquire = "0.5.2"
 log = "0.4.17"
 env_logger = "0.9.3" 
 serde = { version = "1.0", features = ["derive"] }
