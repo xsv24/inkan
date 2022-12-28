@@ -128,10 +128,7 @@ mod tests {
         // Arrange
         let repo = Faker.fake::<String>();
 
-        let command = checkout::Arguments {
-            name: Faker.fake::<String>(),
-            ticket: Some(Faker.fake()),
-        };
+        let command = fake_checkout_args();
 
         let git_commands = GitCommandMock {
             repo: Ok(repo.clone()),
@@ -171,10 +168,7 @@ mod tests {
     #[test]
     fn checkout_on_fail_to_checkout_branch_nothing_is_persisted() -> anyhow::Result<()> {
         // Arrange
-        let command = checkout::Arguments {
-            name: Faker.fake::<String>(),
-            ticket: Some(Faker.fake()),
-        };
+        let command = fake_checkout_args();
 
         let repo = Faker.fake::<String>();
         let git_commands = GitCommandMock {
@@ -211,8 +205,8 @@ mod tests {
         let repo = Faker.fake::<String>();
 
         let command = checkout::Arguments {
-            name: Faker.fake::<String>(),
             ticket: None,
+            ..fake_checkout_args()
         };
 
         let git_commands = GitCommandMock {
@@ -285,10 +279,10 @@ mod tests {
         let args = commit::Arguments {
             ticket: Some(Faker.fake()),
             message: Some(Faker.fake()),
-            ..fake_args()
+            ..fake_commit_args()
         };
 
-        for (template_contents, args) in fake_commit_args(Some(args)) {
+        for (template_contents, args) in fake_commit_templates(Some(args)) {
             let context = fake_context(GitCommandMock::fake())?;
             let actions = Actions::new(&context);
 
@@ -316,10 +310,10 @@ mod tests {
     fn commit_message_with_no_ticket_or_stored_branch_defaults_correctly() -> anyhow::Result<()> {
         let args = commit::Arguments {
             ticket: None,
-            ..fake_args()
+            ..fake_commit_args()
         };
 
-        for (template_contents, args) in fake_commit_args(Some(args)) {
+        for (template_contents, args) in fake_commit_templates(Some(args)) {
             let context = fake_context(GitCommandMock::fake())?;
             let actions = Actions::new(&context);
 
@@ -346,10 +340,10 @@ mod tests {
     fn commit_message_with_no_ticket_uses_stored_branch() -> anyhow::Result<()> {
         let args = commit::Arguments {
             ticket: None,
-            ..fake_args()
+            ..fake_commit_args()
         };
 
-        for (template_contents, args) in fake_commit_args(Some(args)) {
+        for (template_contents, args) in fake_commit_templates(Some(args)) {
             let context = fake_context(GitCommandMock::fake())?;
             let actions = Actions::new(&context);
 
@@ -470,16 +464,26 @@ mod tests {
         Ok(Branch::new(&name, &repo, None)?)
     }
 
-    fn fake_args() -> commit::Arguments {
+    fn fake_checkout_args() -> checkout::Arguments {
+        checkout::Arguments {
+            name: Faker.fake(),
+            ticket: Some(Faker.fake()),
+        }
+    }
+
+    fn fake_commit_args() -> commit::Arguments {
         commit::Arguments {
             template: Faker.fake(),
             ticket: Faker.fake(),
             message: Faker.fake(),
+            scope: Faker.fake(),
         }
     }
 
-    fn fake_commit_args(args: Option<commit::Arguments>) -> Vec<(&'static str, commit::Arguments)> {
-        let args = args.unwrap_or_else(fake_args);
+    fn fake_commit_templates(
+        args: Option<commit::Arguments>,
+    ) -> Vec<(&'static str, commit::Arguments)> {
+        let args = args.unwrap_or_else(fake_commit_args);
 
         vec![
             (
@@ -541,49 +545,49 @@ mod tests {
             "bug".into(),
             TemplateConfig {
                 description: Faker.fake(),
-                content: "{ticket_num} 🐛 {message}".into(),
+                content: "[{ticket_num}] 🐛 {message}".into(),
             },
         );
         map.insert(
             "feature".into(),
             TemplateConfig {
                 description: Faker.fake(),
-                content: "{ticket_num} ✨ {message}".into(),
+                content: "[{ticket_num}] ✨ {message}".into(),
             },
         );
         map.insert(
             "refactor".into(),
             TemplateConfig {
                 description: Faker.fake(),
-                content: "{ticket_num} 🧹 {message}".into(),
+                content: "[{ticket_num}] 🧹 {message}".into(),
             },
         );
         map.insert(
             "break".into(),
             TemplateConfig {
                 description: Faker.fake(),
-                content: "{ticket_num} ⚠️ {message}".into(),
+                content: "[{ticket_num}] ⚠️ {message}".into(),
             },
         );
         map.insert(
             "deps".into(),
             TemplateConfig {
                 description: Faker.fake(),
-                content: "{ticket_num} 📦 {message}".into(),
+                content: "[{ticket_num}] 📦 {message}".into(),
             },
         );
         map.insert(
             "docs".into(),
             TemplateConfig {
                 description: Faker.fake(),
-                content: "{ticket_num} 📖 {message}".into(),
+                content: "[{ticket_num}] 📖 {message}".into(),
             },
         );
         map.insert(
             "test".into(),
             TemplateConfig {
                 description: Faker.fake(),
-                content: "{ticket_num} 🧪 {message}".into(),
+                content: "[{ticket_num}] 🧪 {message}".into(),
             },
         );
 

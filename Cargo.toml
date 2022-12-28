@@ -28,6 +28,7 @@ chrono = { version = "0.4.22" }
 directories = { version = "4.0.1" }
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 rusqlite_migration = "1.0.1"
+regex = "1.7.0"
 uuid = { version = "1.1.2", features = [ "v4" ] }
 
 [dev-dependencies]

@@ -1,9 +1,13 @@
+use std::fmt::Debug;
+
 use crate::{
     app_context::AppContext,
     domain::adapters::{Git, Store},
-    utils::string::into_option,
+    utils::string::{into_option, OptionStr},
 };
+use anyhow::Context;
 use clap::Args;
+use regex::Regex;
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
 pub struct Arguments {
@@ -17,24 +21,47 @@ pub struct Arguments {
     /// Message for the commit.
     #[clap(short, long, value_parser)]
     pub message: Option<String>,
+
+    /// Scope dependency related to the commit.
+    #[clap(short, long, value_parser)]
+    pub scope: Option<String>,
 }
 
 impl Arguments {
-    fn replace_or_remove(message: String, target: &str, replace: &Option<String>) -> String {
+    fn brackets_regex(target: &str) -> anyhow::Result<Regex> {
+        // Replace any surrounding brackets without content with an empty string and remove any trailing spaces.
+        // ({target}) | [{target}] | {{target}} | {target}
+        // example: http://regexr.com/75aee
+        let regex = Regex::new(&format!(
+            r"(\(\{{{}\}}\)\s?)|(\[\{{{}\}}\]\s?)|(\{{\{{{}\}}\}}\s?)|(\{{{}\}}\s?)",
+            target, target, target, target
+        ))?;
+
+        Ok(regex)
+    }
+
+    fn replace_or_remove(
+        message: String,
+        target: &str,
+        replace: Option<String>,
+    ) -> anyhow::Result<String> {
         let template = format!("{{{}}}", target);
 
-        let message = match replace {
+        let message = match &replace.map_empty_to_none() {
             Some(value) => {
                 log::info!("replace '{}' from template with '{}'", target, value);
                 message.replace(&template, value)
             }
             None => {
                 log::info!("removing '{}' from template", target);
-                message.replace(&template, "")
+                Arguments::brackets_regex(target)
+                    .with_context(|| format!("Invalid template for parameter '{}'.", target))?
+                    .replace_all(&message, "")
+                    .into()
             }
         };
 
-        message.trim().into()
+        Ok(message.trim().into())
     }
 
     pub fn commit_message<C: Git, S: Store>(
@@ -42,7 +69,7 @@ impl Arguments {
         template: String,
         context: &AppContext<C, S>,
     ) -> anyhow::Result<String> {
-        log::info!("generate commit message for '{}'", template);
+        log::info!("generate commit message for '{}'", &template);
         let ticket = self.ticket.as_ref().map(|num| num.trim());
 
         let ticket_num = match ticket {
@@ -55,13 +82,9 @@ impl Arguments {
                 )
                 .map_or(None, |branch| Some(branch.ticket)),
         };
-
-        let contents = Self::replace_or_remove(
-            template,
-            "ticket_num",
-            &ticket_num.map(|t| format!("[{}]", t)),
-        );
-        let contents = Self::replace_or_remove(contents, "message", &self.message);
+        let contents = Self::replace_or_remove(template, "ticket_num", ticket_num)?;
+        let contents = Self::replace_or_remove(contents, "message", self.message.clone())?;
+        let contents = Self::replace_or_remove(contents, "scope", self.scope.clone())?;
 
         Ok(contents)
     }
@@ -142,6 +165,30 @@ mod tests {
     }
 
     #[test]
+    fn empty_scope_removes_parentheses() -> anyhow::Result<()> {
+        let context = AppContext {
+            store: Sqlite::new(setup_db(None)?)?,
+            git: TestCommand::fake(),
+            config: fake_config(),
+        };
+
+        let args = Arguments {
+            message: Some(Faker.fake()),
+            scope: Some("".into()),
+            ticket: Some(Faker.fake()),
+            ..fake_args()
+        };
+
+        let actual = args.commit_message("({scope}) [{ticket_num}] {message}".into(), &context)?;
+        let expected = format!("[{}] {}", args.ticket.unwrap(), args.message.unwrap());
+
+        context.close()?;
+        assert_eq!(actual, expected);
+
+        Ok(())
+    }
+
+    #[test]
     fn when_ticket_num_is_empty_square_brackets_are_removed() -> anyhow::Result<()> {
         for ticket in [Some("".into()), Some("   ".into()), None] {
             let context = AppContext {
@@ -151,12 +198,12 @@ mod tests {
             };
 
             let args = Arguments {
-                template: Faker.fake(),
                 ticket,
                 message: Some(Faker.fake()),
+                ..fake_args()
             };
 
-            let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
+            let actual = args.commit_message("[{ticket_num}] {message}".into(), &context)?;
             let expected = format!("{}", args.message.unwrap());
 
             context.close()?;
@@ -178,9 +225,10 @@ mod tests {
             template: Faker.fake(),
             ticket: Some(Faker.fake()),
             message: Some(Faker.fake()),
+            ..fake_args()
         };
 
-        let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
+        let actual = args.commit_message("[{ticket_num}] {message}".into(), &context)?;
         let expected = format!("[{}] {}", args.ticket.unwrap(), args.message.unwrap());
 
         context.close()?;
@@ -198,17 +246,44 @@ mod tests {
         };
 
         let args = Arguments {
-            template: Faker.fake(),
             ticket: Some(Faker.fake()),
             message: None,
+            ..fake_args()
         };
 
         let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
-        let expected = format!("[{}] ", args.ticket.unwrap());
+        let expected = format!("{}", args.ticket.unwrap());
 
         context.close()?;
         assert_eq!(expected.trim(), actual);
 
+        Ok(())
+    }
+
+    #[test]
+    fn commit_template_with_empty_brackets_such_as_markdown_checklist_are_not_removed(
+    ) -> anyhow::Result<()> {
+        let context = AppContext {
+            store: Sqlite::new(setup_db(None)?)?,
+            git: TestCommand::fake(),
+            config: fake_config(),
+        };
+
+        let args = Arguments {
+            message: Some(Faker.fake()),
+            ticket: None,
+            scope: None,
+            ..fake_args()
+        };
+
+        let actual = args.commit_message(
+            "fix({scope}): [{ticket_num}] {message}\n- done? [ ]".into(),
+            &context,
+        )?;
+        let expected = format!("fix: {}\n- done? [ ]", args.message.unwrap());
+
+        context.close()?;
+        assert_eq!(expected.trim(), actual);
         Ok(())
     }
 
@@ -229,7 +304,7 @@ mod tests {
             ..fake_args()
         };
 
-        let actual = args.commit_message("{ticket_num} {message}".into(), &context)?;
+        let actual = args.commit_message("[{ticket_num}] {message}".into(), &context)?;
         let expected = format!(
             "[{}] {}",
             &commands.branch_name,
@@ -247,6 +322,7 @@ mod tests {
             template: Faker.fake(),
             ticket: Faker.fake(),
             message: Faker.fake(),
+            scope: Faker.fake(),
         }
     }
 
@@ -316,6 +392,17 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn brackets_match() {
+        let regex = Arguments::brackets_regex("target").unwrap();
+        assert!(regex.is_match("[{target}]"));
+        assert!(regex.is_match("[{target}] "));
+        assert!(regex.is_match("({target})"));
+        assert!(regex.is_match("({target})\t"));
+        assert!(regex.is_match("{{target}} "));
+        assert!(regex.is_match("{target}"));
     }
 
     fn fake_template_config() -> HashMap<String, TemplateConfig> {
