@@ -148,9 +148,12 @@ mod tests {
     }
 
     #[test]
-    fn repo_dir_with_config_file_used_over_user_and_default_has_priority_2() -> anyhow::Result<()> {
+    fn repo_dir_with_config_file_overrides_any_user_or_default_config_has_priority_2(
+    ) -> anyhow::Result<()> {
         let git: &dyn adapters::Git = &Git;
         let repo_root_with_config = git.root_directory()?;
+        let config = repo_root_with_config.join(".git-kit.yml");
+        std::fs::File::create(&config)?;
 
         for key in [ConfigKey::Default, ConfigKey::User(Faker.fake())] {
             let config_dir = AppConfig::get_config_path(
@@ -162,8 +165,11 @@ mod tests {
                 repo_root_with_config.clone(),
             )?;
 
-            assert_eq!(config_dir, repo_root_with_config.join(".git-kit.yml"));
+            assert_eq!(config_dir, config);
         }
+
+        std::fs::remove_file(config)?;
+
         Ok(())
     }
 

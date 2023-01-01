@@ -1,0 +1,93 @@
+version: 1
+commit:
+  name: conventional
+  templates:
+    fix:
+      description: Fix that resolves an unintended issue i.e bug
+      content: |
+        fix({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+  
+    feat:
+      description: Adds new functionality to the code base
+      content: |
+        feat({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+    
+    test:
+      description: Adds or improves the existing tests related to the code base
+      content: |
+        test({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+
+    refactor:
+      description: Improvement of code / structure without adding new functionality
+      content: |
+        refactor({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+
+    style:
+      description: Formatting, lint fixes i.e missing semi colons, etc; 
+      content: |
+        style({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+
+    chore:
+      description: Grunt work such as updating or migrating dependencies. 
+      content: |
+        chore({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+
+    docs:
+      description: Adds or improves documentation, i.e README's, code comments, etc.
+      content: |
+        docs({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+
+    perf:
+      description: Improvement of code's performance i.e speed, memory, etc 
+      content: |
+        pref({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+
+    build:
+      description: Changes that affect the build system or external dependencies i.e npm
+      content: |
+        build({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}
+    
+    ci:
+      description: Changes to CI configuration files and scripts
+      content: |
+        ci({scope}): {message}
+
+
+
+        Issue: {ticket_num} {link}

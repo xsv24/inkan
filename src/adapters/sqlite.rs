@@ -39,12 +39,14 @@ impl domain::adapters::Store for Sqlite {
 
         self.connection
             .execute(
-                "REPLACE INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+                "REPLACE INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 (
                     &branch.name,
                     &branch.ticket,
                     &branch.data,
                     &branch.created.to_rfc3339(),
+                    &branch.link,
+                    &branch.scope
                 ),
             )
             .with_context(|| format!("Failed to update branch '{}'", &branch.name))?;
@@ -62,7 +64,7 @@ impl domain::adapters::Store for Sqlite {
         );
 
         let branch = self.connection.query_row(
-            "SELECT name, ticket, data, created FROM branch where name = ?",
+            "SELECT name, ticket, data, created, link, scope FROM branch where name = ?",
             [name],
             |row| Branch::try_from(row),
         )?;
@@ -175,10 +177,13 @@ impl<'a> TryFrom<&Row<'a>> for Config {
 
     fn try_from(value: &Row) -> Result<Self, Self::Error> {
         let status = value.get::<_, String>(2)?.try_into().map_err(|e| {
-            log::error!("Corrupted data failed to convert to valid path, {}", e);
+            log::error!(
+                "Corrupted data failed to convert to valid config status, {}",
+                e
+            );
             rusqlite::Error::InvalidColumnType(
                 2,
-                "Failed to convert to valid path".into(),
+                "Failed to convert to valid config status".into(),
                 Type::Text,
             )
         })?;
@@ -219,6 +224,8 @@ impl<'a> TryFrom<&Row<'a>> for Branch {
             ticket: value.get(1)?,
             data: value.get(2)?,
             created,
+            link: value.get(4)?,
+            scope: value.get(5)?,
         };
 
         Ok(branch)
@@ -254,12 +261,9 @@ mod tests {
         // Assert
         assert_eq!(branch_count(&store.connection)?, 1);
 
-        let (name, ticket, data, created) = select_branch_row(&store.connection)?;
+        let actual_branch = select_branch_row(&store.connection)?;
 
-        assert_eq!(branch.name, name);
-        assert_eq!(branch.ticket, ticket);
-        assert_eq!(branch.data, data);
-        assert_eq!(branch.created.to_rfc3339(), created);
+        assert_eq!(branch, actual_branch);
 
         Ok(())
     }
@@ -272,12 +276,14 @@ mod tests {
         let store = Sqlite { connection };
 
         store.connection.execute(
-            "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             (
                 &branch.name,
                 &branch.ticket,
                 &branch.data,
                 &branch.created.to_rfc3339(),
+                &branch.link,
+                &branch.scope
             ),
         )?;
 
@@ -292,12 +298,9 @@ mod tests {
         // Assert
         assert_eq!(branch_count(&store.connection)?, 1);
 
-        let (name, ticket, data, created) = select_branch_row(&store.connection)?;
+        let actual_branch = select_branch_row(&store.connection)?;
 
-        assert_eq!(updated_branch.name, name);
-        assert_eq!(updated_branch.ticket, ticket);
-        assert_eq!(updated_branch.data, data);
-        assert_eq!(updated_branch.created.to_rfc3339(), created);
+        assert_eq!(updated_branch, actual_branch);
 
         Ok(())
     }
@@ -318,14 +321,16 @@ mod tests {
             branches.insert(name, branch.clone());
 
             store.connection.execute(
-                "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 (
                     &branch.name,
                     &branch.ticket,
                     &branch.data,
                     &branch.created.to_rfc3339(),
+                    &branch.link,
+                    &branch.scope
                 ),
-            )?;
+            ).unwrap();
         }
 
         let context = AppContext {
@@ -348,14 +353,9 @@ mod tests {
         let branch = context.store.get_branch(&random_key, &repo)?;
 
         context.close()?;
+
         // Assert
-        assert_eq!(random_branch.name, branch.name);
-        assert_eq!(random_branch.ticket, branch.ticket);
-        assert_eq!(random_branch.data, branch.data);
-        assert_eq!(
-            random_branch.created.to_rfc3339(),
-            branch.created.to_rfc3339()
-        );
+        assert_eq!(random_branch.to_owned(), branch);
 
         Ok(())
     }
@@ -375,12 +375,14 @@ mod tests {
         let expected = fake_branch(Some(name.clone()), Some(repo.clone()))?;
 
         context.store.connection.execute(
-            "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             (
                 &expected.name,
                 &expected.ticket,
                 &expected.data,
                 &expected.created.to_rfc3339(),
+                &expected.link,
+                &expected.scope
             ),
         )?;
 
@@ -617,24 +619,38 @@ mod tests {
     fn fake_branch(name: Option<String>, repo: Option<String>) -> anyhow::Result<Branch> {
         let name = name.unwrap_or(Faker.fake());
         let repo = repo.unwrap_or(Faker.fake());
-        let ticket: Option<String> = Faker.fake();
 
-        Ok(Branch::new(&name, &repo, ticket)?)
+        Ok(Branch::new(
+            &name,
+            &repo,
+            Faker.fake(),
+            Faker.fake(),
+            Faker.fake(),
+        )?)
     }
 
-    fn select_branch_row(
-        conn: &Connection,
-    ) -> anyhow::Result<(String, String, Option<Vec<u8>>, String)> {
-        let (name, ticket, data, created) = conn.query_row("SELECT * FROM branch", [], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<Vec<u8>>>(2)?,
-                row.get::<_, String>(3)?,
-            ))
-        })?;
+    fn select_branch_row(conn: &Connection) -> anyhow::Result<Branch> {
+        let (name, ticket, data, created, link, scope) =
+            conn.query_row("SELECT * FROM branch", [], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<Vec<u8>>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                ))
+            })?;
+        let created = DateTime::parse_from_rfc3339(&created)?.with_timezone(&Utc);
 
-        Ok((name, ticket, data, created))
+        Ok(Branch {
+            name,
+            ticket,
+            data,
+            created,
+            link,
+            scope,
+        })
     }
 
     fn select_config_row(conn: &Connection, key: String) -> anyhow::Result<Config> {
@@ -671,8 +687,7 @@ mod tests {
         db_migrations(
             &mut conn,
             MigrationContext {
-                config_path: Path::new(".").to_owned(),
-                enable_side_effects: false,
+                default_configs: None,
                 version: None,
             },
         )?;

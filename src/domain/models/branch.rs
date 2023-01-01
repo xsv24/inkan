@@ -1,19 +1,29 @@
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Branch {
     pub name: String,
     pub ticket: String,
     pub created: DateTime<Utc>,
     pub data: Option<Vec<u8>>,
+    pub link: Option<String>,
+    pub scope: Option<String>,
 }
 
 impl Branch {
-    pub fn new(name: &str, repo: &str, ticket: Option<String>) -> anyhow::Result<Branch> {
+    pub fn new(
+        name: &str,
+        repo: &str,
+        ticket: Option<String>,
+        link: Option<String>,
+        scope: Option<String>,
+    ) -> anyhow::Result<Branch> {
         Ok(Branch {
             name: format!("{}-{}", repo.trim(), name.trim()),
             created: Utc::now(),
             ticket: ticket.unwrap_or_else(|| name.into()),
+            link,
+            scope,
             data: None,
         })
     }
@@ -33,13 +43,23 @@ mod tests {
         let repo = Faker.fake::<String>();
         let name = Faker.fake::<String>();
         let ticket = Faker.fake::<String>();
+        let scope = Faker.fake::<String>();
+        let link = Faker.fake::<String>();
 
         // Act
-        let branch = Branch::new(&name, &repo, Some(ticket.clone()))?;
+        let branch = Branch::new(
+            &name,
+            &repo,
+            Some(ticket.clone()),
+            Some(link.clone()),
+            Some(scope.clone()),
+        )?;
 
         // Assert
         assert_eq!(branch.name, format!("{}-{}", &repo, &name));
         assert_eq!(branch.ticket, ticket);
+        assert_eq!(branch.scope.unwrap(), scope);
+        assert_eq!(branch.link.unwrap(), link);
         assert!(branch.created > now);
         assert_eq!(branch.data, None);
 
@@ -54,7 +74,7 @@ mod tests {
         let repo = Faker.fake::<String>();
 
         // Act
-        let branch = Branch::new(&name, &repo, None)?;
+        let branch = Branch::new(&name, &repo, None, None, None)?;
 
         // Assert
         assert_eq!(branch.name, format!("{}-{}", &repo, &name));
@@ -74,7 +94,7 @@ mod tests {
         let repo = Faker.fake::<String>();
 
         // Act
-        let branch = Branch::new(&name, &repo, Some(ticket.clone()))?;
+        let branch = Branch::new(&name, &repo, Some(ticket.clone()), None, None)?;
 
         // Assert
         assert_eq!(branch.name, format!("{}-{}", &repo.trim(), &name.trim()));

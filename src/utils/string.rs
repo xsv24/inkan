@@ -1,7 +1,7 @@
 pub fn into_option<S: Into<String>>(value: S) -> Option<String> {
-    let value: String = value.into();
+    let value: String = value.into().trim().to_string();
 
-    if !value.trim().is_empty() {
+    if !value.is_empty() {
         Some(value)
     } else {
         None
@@ -9,24 +9,13 @@ pub fn into_option<S: Into<String>>(value: S) -> Option<String> {
 }
 
 pub trait OptionStr<T> {
-    fn map_empty_to_none(self) -> Option<T>;
-
-    fn map_non_empty(self, map: fn(T) -> T) -> Option<T>;
+    fn none_if_empty(self) -> Option<T>;
 }
 
 impl OptionStr<String> for Option<String> {
-    fn map_empty_to_none(self) -> Option<String> {
+    fn none_if_empty(self) -> Option<String> {
         match self {
-            Some(value) if value.trim().is_empty() => None,
-            Some(value) => Some(value.trim().to_string()),
-            None => None,
-        }
-    }
-
-    fn map_non_empty(self, map: fn(String) -> String) -> Option<String> {
-        match self {
-            Some(value) if value.trim().is_empty() => None,
-            Some(value) => Some(map(value.trim().to_string())),
+            Some(value) => into_option(value),
             None => None,
         }
     }
@@ -40,7 +29,7 @@ mod tests {
     fn empty_strings_wrapped_in_some_should_be_mapped_to_none() {
         for item in ["", " ", "\t", "\n"] {
             let option = Some(item.into());
-            let option = option.map_empty_to_none();
+            let option = option.none_if_empty();
 
             assert!(option.is_none());
         }
@@ -50,7 +39,7 @@ mod tests {
     fn non_empty_strings_wrapped_in_some_should_not_be_remapped_to_none() {
         for item in [" h ", "hello"] {
             let option = Some(item.into());
-            let option = option.map_empty_to_none();
+            let option = option.none_if_empty();
 
             assert!(option.is_some());
             assert_eq!(item.trim(), option.unwrap());

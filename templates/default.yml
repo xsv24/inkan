@@ -1,9 +1,12 @@
+version: 1
 commit:
+  name: default
   templates:
     bug:
       description: Fix that resolves an unintended issue
       content: |
         [{ticket_num}] 🐛 {message}
+
     break:
       description: Breaking change that could break a consuming application
       content: |
@@ -19,7 +22,7 @@ commit:
       content: |
         [{ticket_num}] 📖 {message}
 
-    feature:
+    feat:
       description: Adds new functionality
       content: |
         [{ticket_num}] ✨ {message}
@@ -33,3 +36,13 @@ commit:
       description: Adds or improves the existing tests related to the code base
       content: |
         [{ticket_num}] 🧪 {message}
+
+    chore:
+      description: Regular code maintenance.
+      content: |
+        [{ticket_num}] 📋 {message}
+
+    ci:
+      description: Changes to CI configuration files and scripts
+      content: |
+        [{ticket_num}] 🚰 {message}

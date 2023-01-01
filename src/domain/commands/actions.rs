@@ -26,7 +26,7 @@ impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
         let repo_name = self.context.git.get_repo_name()?;
         let branch_name = self.context.git.get_branch_name()?;
 
-        let branch = Branch::new(&branch_name, &repo_name, Some(args.ticket))?;
+        let branch = Branch::new(&branch_name, &repo_name, args.ticket, args.link, args.scope)?;
         self.context.store.persist_branch(&branch)?;
 
         Ok(branch)
@@ -48,7 +48,7 @@ impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
         // We want to store the branch name against and ticket number
         // So whenever we commit we get the ticket number from the branch
         let repo_name = self.context.git.get_repo_name()?;
-        let branch = Branch::new(&args.name, &repo_name, args.ticket.clone())?;
+        let branch = Branch::new(&args.name, &repo_name, args.ticket, args.link, args.scope)?;
         self.context.store.persist_branch(&branch)?;
 
         Ok(branch)
@@ -79,7 +79,6 @@ mod tests {
     use crate::app_config::CommitConfig;
     use crate::app_config::TemplateConfig;
     use crate::app_context::AppContext;
-
     use crate::domain::adapters::CheckoutStatus;
     use crate::migrations::{db_migrations, MigrationContext};
 
@@ -91,8 +90,8 @@ mod tests {
         let repo = Faker.fake::<String>();
 
         let command = checkout::Arguments {
-            name: Faker.fake::<String>(),
             ticket: Some(Faker.fake()),
+            ..fake_checkout_args()
         };
 
         let git_commands = GitCommandMock {
@@ -101,7 +100,7 @@ mod tests {
             ..GitCommandMock::fake()
         };
 
-        let context = fake_context(git_commands.clone())?;
+        let context = fake_context(git_commands.clone(), fake_config())?;
         let actions = Actions::new(&context);
 
         // Act
@@ -115,8 +114,13 @@ mod tests {
             &git_commands.branch_name.unwrap()
         );
 
-        assert_eq!(&branch.name, &name);
-        assert_eq!(branch.ticket, command.ticket.unwrap());
+        let expected = Branch {
+            name,
+            ticket: command.ticket.unwrap(),
+            ..branch.clone()
+        };
+
+        assert_eq!(branch, expected);
 
         context.close()?;
 
@@ -143,7 +147,7 @@ mod tests {
             ..GitCommandMock::fake()
         };
 
-        let context = fake_context(git_commands.clone())?;
+        let context = fake_context(git_commands.clone(), fake_config())?;
         let actions = Actions::new(&context);
 
         // Act
@@ -157,8 +161,16 @@ mod tests {
             &git_commands.branch_name.unwrap()
         );
 
-        assert_eq!(&branch.name, &name);
-        assert_eq!(branch.ticket, command.ticket.unwrap());
+        let expected = Branch {
+            name,
+            ticket: command.ticket.unwrap(),
+            link: command.link,
+            scope: command.scope,
+            created: branch.created,
+            data: None,
+        };
+
+        assert_eq!(branch, expected);
 
         context.close()?;
 
@@ -178,7 +190,7 @@ mod tests {
             ..GitCommandMock::fake()
         };
 
-        let context = fake_context(git_commands.clone())?;
+        let context = fake_context(git_commands.clone(), fake_config())?;
         let actions = Actions::new(&context);
 
         // Act
@@ -215,7 +227,7 @@ mod tests {
             ..GitCommandMock::fake()
         };
 
-        let context = fake_context(git_commands.clone())?;
+        let context = fake_context(git_commands.clone(), fake_config())?;
         let actions = Actions::new(&context);
 
         // Act
@@ -229,8 +241,16 @@ mod tests {
             &git_commands.branch_name.unwrap()
         );
 
-        assert_eq!(&branch.name, &name);
-        assert_eq!(&branch.ticket, &command.name);
+        let expected = Branch {
+            name,
+            ticket: command.name,
+            scope: command.scope,
+            link: command.link,
+            data: None,
+            created: branch.created,
+        };
+
+        assert_eq!(branch, expected);
 
         context.close()?;
 
@@ -243,7 +263,8 @@ mod tests {
         let branch_name = Faker.fake::<String>();
         let repo = Faker.fake::<String>();
         let command = context::Arguments {
-            ticket: Faker.fake(),
+            ticket: Some(Faker.fake()),
+            ..fake_context_args()
         };
 
         let git_commands = GitCommandMock {
@@ -252,7 +273,7 @@ mod tests {
             ..GitCommandMock::fake()
         };
 
-        let context = fake_context(git_commands.clone())?;
+        let context = fake_context(git_commands.clone(), fake_config())?;
         let actions = Actions::new(&context);
 
         // Act
@@ -266,8 +287,14 @@ mod tests {
             &git_commands.branch_name.unwrap()
         );
 
-        assert_eq!(&branch.name, &name);
-        assert_eq!(branch.ticket, command.ticket);
+        let expected = Branch {
+            name,
+            ticket: command.ticket.unwrap(),
+            link: command.link,
+            scope: command.scope,
+            ..branch.clone()
+        };
+        assert_eq!(branch, expected);
 
         context.close()?;
 
@@ -275,101 +302,131 @@ mod tests {
     }
 
     #[test]
-    fn commit_message_with_ticket_and_message_arg_are_formatted_correctly() -> anyhow::Result<()> {
+    fn commit_message_with_all_arguments_are_injected_into_the_template_with_nothing_persisted(
+    ) -> anyhow::Result<()> {
+        // Arrange
+        let (template, template_config) = fake_template();
+
+        let config = AppConfig {
+            commit: CommitConfig {
+                templates: HashMap::from([(template.clone(), template_config)]),
+            },
+        };
+
+        let context = fake_context(GitCommandMock::fake(), config)?;
+        let actions = Actions::new(&context);
+
         let args = commit::Arguments {
             ticket: Some(Faker.fake()),
             message: Some(Faker.fake()),
+            scope: Some(Faker.fake()),
+            template,
             ..fake_commit_args()
         };
 
-        for (template_contents, args) in fake_commit_templates(Some(args)) {
-            let context = fake_context(GitCommandMock::fake())?;
-            let actions = Actions::new(&context);
+        // Act
+        let contents = actions
+            .commit(args.clone())
+            .expect("Error performing 'commit' action");
 
-            // Act
-            let contents = actions
-                .commit(args.clone())
-                .expect("Error performing 'commit' action");
+        // Assert
+        let expected = format!(
+            "[{}] message: '{}', scope: '{}', link: '{}'",
+            args.ticket.clone().unwrap(),
+            args.message.clone().unwrap(),
+            args.scope.unwrap(),
+            ""
+        );
+        assert_eq!(expected, contents);
 
-            // Assert
-            let expected = format!(
-                "[{}] {} {}",
-                args.ticket.clone().unwrap_or("".into()),
-                template_contents,
-                args.message.clone().unwrap_or("".into())
-            );
-            assert_eq!(expected, contents);
-
-            context.close()?;
-        }
+        context.close()?;
 
         Ok(())
     }
 
     #[test]
-    fn commit_message_with_no_ticket_or_stored_branch_defaults_correctly() -> anyhow::Result<()> {
-        let args = commit::Arguments {
-            ticket: None,
-            ..fake_commit_args()
+    fn commit_message_with_no_args_or_stored_branch_defaults_correctly() -> anyhow::Result<()> {
+        // Arrange
+        let (template, template_config) = fake_template();
+
+        let config = AppConfig {
+            commit: CommitConfig {
+                templates: HashMap::from([(template.clone(), template_config)]),
+            },
         };
 
-        for (template_contents, args) in fake_commit_templates(Some(args)) {
-            let context = fake_context(GitCommandMock::fake())?;
-            let actions = Actions::new(&context);
+        let context = fake_context(GitCommandMock::fake(), config)?;
+        let actions = Actions::new(&context);
 
-            // Act
-            let contents = actions
-                .commit(args.clone())
-                .expect("Error performing 'commit' action");
+        let args = commit::Arguments {
+            ticket: None,
+            message: None,
+            scope: None,
+            template,
+        };
 
-            // Assert
-            let expected = format!(
-                "{} {}",
-                template_contents,
-                args.message.clone().unwrap_or("".into())
-            );
-            assert_eq!(expected.trim(), contents);
+        // Act
+        let contents = actions
+            .commit(args.clone())
+            .expect("Error performing 'commit' action");
 
-            context.close()?;
-        }
+        // Assert
+        assert_eq!("message: '', scope: '', link: ''", contents);
+
+        context.close()?;
 
         Ok(())
     }
 
     #[test]
-    fn commit_message_with_no_ticket_uses_stored_branch() -> anyhow::Result<()> {
-        let args = commit::Arguments {
-            ticket: None,
-            ..fake_commit_args()
+    fn commit_message_with_no_commit_args_defaults_to_stored_branch_values() -> anyhow::Result<()> {
+        // Arrange
+        let (template, template_config) = fake_template();
+
+        let config = AppConfig {
+            commit: CommitConfig {
+                templates: HashMap::from([(template.clone(), template_config)]),
+            },
         };
 
-        for (template_contents, args) in fake_commit_templates(Some(args)) {
-            let context = fake_context(GitCommandMock::fake())?;
-            let actions = Actions::new(&context);
+        let args = commit::Arguments {
+            template,
+            message: Some(Faker.fake()),
+            ticket: None,
+            scope: None,
+        };
 
-            let branch_name = context.git.get_branch_name()?;
-            let repo_name = context.git.get_repo_name()?;
-            setup_db(
-                &context.store,
-                Some(&fake_branch(Some(branch_name.clone()), Some(repo_name))?),
-            )?;
+        let context = fake_context(GitCommandMock::fake(), config)?;
+        let actions = Actions::new(&context);
 
-            // Act
-            let contents = actions
-                .commit(args.clone())
-                .expect("Error performing 'commit' action");
+        let branch_name = Some(context.git.get_branch_name()?);
+        let repo_name = Some(context.git.get_repo_name()?);
+        let ticket = None;
+        let branch = Branch {
+            link: Some(Faker.fake()),
+            scope: Some(Faker.fake()),
+            ..fake_branch(branch_name.clone(), repo_name, ticket)?
+        };
 
-            // Assert
-            let expected = format!(
-                "[{}] {} {}",
-                branch_name,
-                template_contents,
-                args.message.clone().unwrap_or("".into())
-            );
-            assert_eq!(expected.trim(), contents);
+        setup_db(&context.store, Some(&branch))?;
 
-            context.close()?;
-        }
+        // Act
+        let commit_message = actions
+            .commit(args.clone())
+            .expect("Error performing 'commit' action");
+
+        // Assert
+        let expected = format!(
+            "[{}] message: '{}', scope: '{}', link: '{}'",
+            branch_name.unwrap(),
+            args.message.unwrap(),
+            branch.scope.unwrap(),
+            branch.link.unwrap()
+        );
+
+        assert_eq!(expected.trim(), commit_message);
+
+        context.close()?;
 
         Ok(())
     }
@@ -382,20 +439,23 @@ mod tests {
         }
     }
 
-    fn fake_context<'a, C: Git>(git: C) -> anyhow::Result<AppContext<C, Sqlite>> {
+    fn fake_context<'a, C: Git>(
+        git: C,
+        config: AppConfig,
+    ) -> anyhow::Result<AppContext<C, Sqlite>> {
         let mut connection = Connection::open_in_memory()?;
+
         db_migrations(
             &mut connection,
             MigrationContext {
-                config_path: PathBuf::new(),
-                enable_side_effects: false,
+                default_configs: None,
                 version: None,
             },
         )?;
 
         let context = AppContext {
             store: Sqlite::new(connection)?,
-            config: fake_config(),
+            config,
             git,
         };
 
@@ -457,17 +517,29 @@ mod tests {
         }
     }
 
-    fn fake_branch(name: Option<String>, repo: Option<String>) -> anyhow::Result<Branch> {
+    fn fake_branch(
+        name: Option<String>,
+        repo: Option<String>,
+        ticket: Option<String>,
+    ) -> anyhow::Result<Branch> {
         let name = name.unwrap_or(Faker.fake());
         let repo = repo.unwrap_or(Faker.fake());
 
-        Ok(Branch::new(&name, &repo, None)?)
+        Ok(Branch::new(
+            &name,
+            &repo,
+            ticket,
+            Faker.fake(),
+            Faker.fake(),
+        )?)
     }
 
     fn fake_checkout_args() -> checkout::Arguments {
         checkout::Arguments {
             name: Faker.fake(),
             ticket: Some(Faker.fake()),
+            link: Some(Faker.fake()),
+            scope: Some(Faker.fake()),
         }
     }
 
@@ -480,117 +552,26 @@ mod tests {
         }
     }
 
-    fn fake_commit_templates(
-        args: Option<commit::Arguments>,
-    ) -> Vec<(&'static str, commit::Arguments)> {
-        let args = args.unwrap_or_else(fake_commit_args);
+    fn fake_context_args() -> context::Arguments {
+        context::Arguments {
+            ticket: Faker.fake(),
+            scope: Faker.fake(),
+            link: Faker.fake(),
+        }
+    }
 
-        vec![
-            (
-                "🐛",
-                commit::Arguments {
-                    template: "bug".into(),
-                    ..args.clone()
-                },
-            ),
-            (
-                "✨",
-                commit::Arguments {
-                    template: "feature".into(),
-                    ..args.clone()
-                },
-            ),
-            (
-                "🧹",
-                commit::Arguments {
-                    template: "refactor".into(),
-                    ..args.clone()
-                },
-            ),
-            (
-                "⚠️",
-                commit::Arguments {
-                    template: "break".into(),
-                    ..args.clone()
-                },
-            ),
-            (
-                "📦",
-                commit::Arguments {
-                    template: "deps".into(),
-                    ..args.clone()
-                },
-            ),
-            (
-                "📖",
-                commit::Arguments {
-                    template: "docs".into(),
-                    ..args.clone()
-                },
-            ),
-            (
-                "🧪",
-                commit::Arguments {
-                    template: "test".into(),
-                    ..args.clone()
-                },
-            ),
-        ]
+    fn fake_template() -> (String, TemplateConfig) {
+        let config = TemplateConfig {
+            description: Faker.fake(),
+            content: "[{ticket_num}] message: '{message}', scope: '{scope}', link: '{link}'".into(),
+        };
+
+        (Faker.fake(), config)
     }
 
     fn fake_template_config() -> HashMap<String, TemplateConfig> {
-        let mut map = HashMap::new();
+        let (_, config) = fake_template();
 
-        map.insert(
-            "bug".into(),
-            TemplateConfig {
-                description: Faker.fake(),
-                content: "[{ticket_num}] 🐛 {message}".into(),
-            },
-        );
-        map.insert(
-            "feature".into(),
-            TemplateConfig {
-                description: Faker.fake(),
-                content: "[{ticket_num}] ✨ {message}".into(),
-            },
-        );
-        map.insert(
-            "refactor".into(),
-            TemplateConfig {
-                description: Faker.fake(),
-                content: "[{ticket_num}] 🧹 {message}".into(),
-            },
-        );
-        map.insert(
-            "break".into(),
-            TemplateConfig {
-                description: Faker.fake(),
-                content: "[{ticket_num}] ⚠️ {message}".into(),
-            },
-        );
-        map.insert(
-            "deps".into(),
-            TemplateConfig {
-                description: Faker.fake(),
-                content: "[{ticket_num}] 📦 {message}".into(),
-            },
-        );
-        map.insert(
-            "docs".into(),
-            TemplateConfig {
-                description: Faker.fake(),
-                content: "[{ticket_num}] 📖 {message}".into(),
-            },
-        );
-        map.insert(
-            "test".into(),
-            TemplateConfig {
-                description: Faker.fake(),
-                content: "[{ticket_num}] 🧪 {message}".into(),
-            },
-        );
-
-        map
+        HashMap::from([("bug".into(), config)])
     }
 }

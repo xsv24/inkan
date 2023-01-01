@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::{
     app_context::AppContext,
     domain::adapters::{Git, Store},
-    utils::string::{into_option, OptionStr},
+    utils::{merge, string::OptionStr},
 };
 use anyhow::Context;
 use clap::Args;
@@ -22,7 +22,7 @@ pub struct Arguments {
     #[clap(short, long, value_parser)]
     pub message: Option<String>,
 
-    /// Scope dependency related to the commit.
+    /// Short describing a section of the codebase the changes relate to.
     #[clap(short, long, value_parser)]
     pub scope: Option<String>,
 }
@@ -47,7 +47,7 @@ impl Arguments {
     ) -> anyhow::Result<String> {
         let template = format!("{{{}}}", target);
 
-        let message = match &replace.map_empty_to_none() {
+        let message = match &replace.none_if_empty() {
             Some(value) => {
                 log::info!("replace '{}' from template with '{}'", target, value);
                 message.replace(&template, value)
@@ -70,21 +70,26 @@ impl Arguments {
         context: &AppContext<C, S>,
     ) -> anyhow::Result<String> {
         log::info!("generate commit message for '{}'", &template);
-        let ticket = self.ticket.as_ref().map(|num| num.trim());
+        let branch = context
+            .store
+            .get_branch(
+                &context.git.get_branch_name()?,
+                &context.git.get_repo_name()?,
+            )
+            .ok();
 
-        let ticket_num = match ticket {
-            Some(num) => into_option(num),
-            None => context
-                .store
-                .get_branch(
-                    &context.git.get_branch_name()?,
-                    &context.git.get_repo_name()?,
-                )
-                .map_or(None, |branch| Some(branch.ticket)),
-        };
-        let contents = Self::replace_or_remove(template, "ticket_num", ticket_num)?;
+        let (ticket, scope, link) = branch
+            .map(|branch| (Some(branch.ticket), branch.scope, branch.link))
+            .unwrap_or((None, None, None));
+
+        let ticket = merge(self.ticket.clone().none_if_empty(), ticket.none_if_empty());
+
+        let scope = merge(self.scope.clone().none_if_empty(), scope.none_if_empty());
+
+        let contents = Self::replace_or_remove(template, "ticket_num", ticket)?;
+        let contents = Self::replace_or_remove(contents, "scope", scope)?;
+        let contents = Self::replace_or_remove(contents, "link", link)?;
         let contents = Self::replace_or_remove(contents, "message", self.message.clone())?;
-        let contents = Self::replace_or_remove(contents, "scope", self.scope.clone())?;
 
         Ok(contents)
     }
@@ -98,6 +103,7 @@ mod tests {
         adapters::sqlite::Sqlite,
         app_config::{AppConfig, CommitConfig, TemplateConfig},
         domain::{adapters::CheckoutStatus, models::Branch},
+        migrations::{db_migrations, MigrationContext},
     };
     use fake::{Fake, Faker};
     use rusqlite::Connection;
@@ -291,7 +297,7 @@ mod tests {
     fn commit_template_ticket_num_is_replaced_with_branch_name() -> anyhow::Result<()> {
         let commands = TestCommand::fake();
 
-        let branch = Branch::new(&commands.branch_name, &commands.repo, None)?;
+        let branch = Branch::new(&commands.branch_name, &commands.repo, None, None, None)?;
 
         let context = AppContext {
             store: Sqlite::new(setup_db(Some(&branch))?)?,
@@ -470,26 +476,26 @@ mod tests {
     }
 
     fn setup_db(branch: Option<&Branch>) -> anyhow::Result<Connection> {
-        let conn = Connection::open_in_memory()?;
+        let mut conn = Connection::open_in_memory()?;
 
-        conn.execute(
-            "CREATE TABLE branch (
-                name TEXT NOT NULL PRIMARY KEY,
-                ticket TEXT,
-                data BLOB,
-                created TEXT NOT NULL
-            )",
-            (),
+        db_migrations(
+            &mut conn,
+            MigrationContext {
+                default_configs: None,
+                version: None,
+            },
         )?;
 
         if let Some(branch) = branch {
             conn.execute(
-                "INSERT INTO branch (name, ticket, data, created) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 (
                     &branch.name,
                     &branch.ticket,
                     &branch.data,
                     branch.created.to_rfc3339(),
+                    &branch.link,
+                    &branch.scope
                 ),
             )?;
         }
