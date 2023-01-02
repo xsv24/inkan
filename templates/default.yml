@@ -13,12 +13,12 @@ commit:
         [{ticket_num}] ⚠️ {message}
 
     deps:
-      description: Dependency update or migration to a new dependency
+      description: Version update or migration to a new dependency
       content: |
         [{ticket_num}] 📦 {message}
 
     docs:
-      description: Documentation change
+      description: Change or update to documentation (i.e README's, code comments, etc)
       content: |
         [{ticket_num}] 📖 {message}
 
@@ -33,7 +33,7 @@ commit:
         [{ticket_num}] 🧹 {message}
 
     test:
-      description: Adds or improves the existing tests related to the code base
+      description: Improves or adds existing tests related to the code base
       content: |
         [{ticket_num}] 🧪 {message}
 

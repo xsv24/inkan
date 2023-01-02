@@ -21,7 +21,7 @@ commit:
         Issue: {ticket_num} {link}
     
     test:
-      description: Adds or improves the existing tests related to the code base
+      description: Improves or adds existing tests related to the code base
       content: |
         test({scope}): {message}
 
@@ -39,7 +39,7 @@ commit:
         Issue: {ticket_num} {link}
 
     style:
-      description: Formatting, lint fixes i.e missing semi colons, etc; 
+      description:  Formatting updates, lint fixes, etc. (i.e. missing semi colons)
       content: |
         style({scope}): {message}
 
@@ -57,7 +57,7 @@ commit:
         Issue: {ticket_num} {link}
 
     docs:
-      description: Adds or improves documentation, i.e README's, code comments, etc.
+      description: Change or update to documentation (i.e README's, code comments, etc).
       content: |
         docs({scope}): {message}
 
@@ -66,7 +66,7 @@ commit:
         Issue: {ticket_num} {link}
 
     perf:
-      description: Improvement of code's performance i.e speed, memory, etc 
+      description:  Improvement of code performance (i.e. speed, memory, etc)
       content: |
         pref({scope}): {message}
 

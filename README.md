@@ -2,31 +2,81 @@
 [![git-logo](https://img.shields.io/badge/git-F05032?style=for-the-badge&logo=git&logoColor=white)](https://git-scm.com/)
 
 [![crates.io](https://img.shields.io/crates/v/git-kit?label=%F0%9F%93%A6%20git-kit&style=flat-square)](https://crates.io/crates/git-kit)
-[![Main branch checks](https://img.shields.io/github/workflow/status/xsv24/git-kit/Commit%20CI?label=%F0%9F%91%8C%20checks&style=flat-square)](https://github.com/xsv24/git-kit/actions)
+[![Main branch tests](https://img.shields.io/github/actions/workflow/status/xsv24/git-kit/commit.yml?branch=main&label=%F0%9F%A7%AA%20tests&style=flat-square)](https://img.shields.io/github/actions/workflow/status/xsv24/git-kit/actions)
 [![license](https://img.shields.io/github/license/xsv24/git-kit?color=blue&style=flat-square&logo=)](./LICENSE)
 
 # 🧰 git-kit
 
-cli to help format your git commit messages consistently with less effort via pre-provided templates 🤩
+Use this CLI to help format your git commit messages consistently with less effort via pre-provided templates! 🤩
 
-```text
--  ⚠️ break       Breaking change that could break a consuming application
--  🐛 bug         Fix that resolves an unintended issue
--  📦 deps        Dependency update or migration to a new dependency
--  📖 docs        Documentation change
--  ✨ feature     Adds new functionality
--  🧹 refactor    Improvement of code / structure without adding new functionality
--  🧪 test        Adds or improves the existing tests related to the code base
+There are two default templates provided:
+
+1) [**Simple Commit Template**](#simple-commit-template)
+
+
+2) [**Conventional Commit Template**](#conventional-commit-standard-templates)
+
+You can also create your own Custom Templates by following the [**Custom Template Guide**](#-custom-commit-template-example). 
+
+## Simple Commit Template
+```bash
+git-kit config set default
 ```
 
-> - `[TICKET-123] 🐛 fix`
-> - `[TICKET-123] 🧹  Clean up`
+```text
+-  ✨ feat        Adds new functionality.
+-  🐛 bug         Fix that resolves an unintended issue.
+-  🧪 test        Improves or adds existing tests related to the code base.
+-  🧹 refactor    Improvement of code/structure without adding new functionality.
+- 📖 docs         Change or update to documentation (i.e README's, code comments, etc).
+-  📦 deps        Version update or migration to a new dependency.
+-  ⚠️ break        Breaking change that may break a downstream application or service.
+-  📋 chore       Regular code maintenance.
+-  🏭 ci          Changes to CI configuration files and scripts.
+```
 
-## 🥽 Prerequisites
+### Example Commit format:
+- `[{ticket_num}] ❓ {message}`
 
-- Install [Rust](https://www.rust-lang.org/tools/install)
+
+### Template Context:
+
+- `ticket_num` ticket / issue number related to the branch.
+- `message` commit message.
+
+## Conventional Commit Standard Templates
+
+```bash
+git-kit config set conventional
+```
+
+```text
+- ✨ feat        Adds new functionality.
+- ⛑ fix         Fix that resolves an unintended issue (i.e. bug).
+- 🧪 test        Improves or adds existing tests related to the code base.
+- 🧹 refactor    Improvement of code/structure without adding new functionality.
+- 📖 docs        Change or update to documentation (i.e README's, code comments, etc).
+- 🔨 build       Changes that affect the build system or external dependencies.
+- 📋 chore       Regular code maintenance.
+- 🏭 ci          Changes to CI configuration files and scripts.
+- 🏎 perf        Improvement of code performance (i.e. speed, memory, etc).
+- 🕺 style       Formatting updates, lint fixes, etc. (i.e. missing semi colons).
+```
+
+### Commit format:
+- `{type}({scope}): {message}`
+
+
+### Template commit context:
+
+- `ticket_num` ticket / issuer number related to the branch.
+- `message` subject message.
+- `scope` Short description of a section of the codebase the commit relates to.
 
 ## ⏳ Install Binary
+
+### Rust
+- Install [Rust](https://www.rust-lang.org/tools/install)
 
 ```bash
 cargo install git-kit
@@ -38,87 +88,124 @@ git-kit --help
 
 ## 🏎️💨 Getting Started
 
-### ☑ Templates command
-
-Lists currently available commit templates to add your own checkout [Custom Commit templates](#-custom-commit-template-example).
-
-
 ```bash
+# Checkout a new branch & add optional context params.
+git-kit checkout fix-parser
+  --ticket TICKET-123 \
+  --scope parser \
+  --link "http://ticket-manager/TICKET-123"
+
+# Select a registered config containing templates to use.
+git-kit config set
+
+# View currently available templates on chosen config.
 git-kit templates
 
-- bug |  Fix that resolves an unintended issue
-- ...
+# Commit some changes.
+git-kit commit bug -m "Fix up parser"
+git-kit commit chore
 ```
+---
 
 ### 🎟️ Checkout command
 
-Creates or checks out an existing git branch and adds a ticket number as context against that branch for future commits.
+Creates a new branch or checks out an existing branch attaching the following optional context parameters for use in future commit templates.
 
-So now you don't have to remember the ticket number associated to the branch! 💡.
+- `ticket_num` Issue number related to the branch.
+- `link` Link to to the related issue.
+- `scope` Short description of a section of the codebase the commit relates to.
 
-When it's time to [commit](#commit-command) your changes the provided ticket number will be injected into each commit message </br>
-thats created on the linked branch for you automatically! 😄
+When it's time to [commit](#commit-command) your changes any provided context params (i.e.`ticket_number`) will be injected into each commit message for you automatically! 😄 It does this by a simple template string injection.
 
+Examples:
 ```bash
-git-kit checkout my-branch -t TICKET-123
+git-kit checkout my-branch --ticket TICKET-123
+git-kit checkout my-branch \
+  -t TICKET-123 \
+  --scope parser \
+  --link "http://ticket-manager/TICKET-123"
 ```
-> This will create or checkout a branch named `my-branch` & link `TICKET-123` as the ticket number context to inject on any future commits on the branch named `my-branch`.
 
-Most likely your ticket / issue will only have one branch associated to it in this case you can use the following shorthand 👌
+Most likely your ticket / issue will only have one branch associated to it. In this case you can use the following shorthand 👌
 
 ```bash
 git-kit checkout TICKET-123
 ```
-> This will create or checkout a branch `TICKET-123` & link `TICKET-123` as the ticket number context to inject on any future commits on the branch `TICKET-123`.
 
+---
 ### 🔗 Context command
 
-Create or update context linked to the current checked out branch.
+Create or update context params linked to the current checked out branch.
 
-This is handy if you forgot to checkout by the provided `git-kit` [checkout command](#-checkout-command) or if you've made a typo
-in on the provided ticket number.
+- `ticket_num` Issue number related to the branch.
+- `link` Link to to the related issue.
+- `scope` Short description of a section of the codebase the commit relates to.
 
-Again when it's time to [commit](#-commit-command) your changes the provided ticket number will be injected into each commit message </br>
-thats created on the linked branch for you automatically! 
+This is handy if you forgot to add context via the `git-kit` [checkout command](#-checkout-command) or if you want to update the context for future commits.
+
+When it's time to [commit](#commit-command) your changes any provided context params (i.e.`ticket_number`) will be injected into each commit message for you automatically! 😄 It does this by a simple template string injection.
+
 
 ```bash
-git-kit context TICKET-123
+git-kit context \
+  --ticket TICKET-123 \
+  --scope parser \
+  --link "http://ticket-manager/TICKET-123"
 ```
-
+---
 ### 🚀 Commit command
 
-Commits your changes with a formatted message with your ticket number injected if provided from the [checkout](#-checkout-command) or the [context](#-context-command) command.
-
-When committing you can specify a template to use to help describe the changes made within your commit.
-
-```text
--  ⚠️ break       Breaking change that could break a consuming application
--  🐛 bug         Fix that resolves an unintended issue
--  📦 deps        Dependency update or migration to a new dependency
--  📖 docs        Documentation change
--  ✨ feature     Adds new functionality
--  🧹 refactor    Improvement of code / structure without adding new functionality
--  🧪 test        Adds or improves the existing tests related to the code base
-```
+Commits any staged changes and builds an editable commit message by injecting any context set parameters from the [checkout](#-checkout-command) or [context](#-context-command) commands into a chosen [template](./templates/default.yml) (i.e. `bug`).
 
 ```bash
-git-kit commit bug -m "fix"
+git-kit commit bug
 ```
-> This will create an editable commit with the following format and will insert branch name will be injected by default into the `bug` commit template.
->
-> `[TICKET-123] 🐛 fix`
+> Example template:
+> 
+> `[{ticket_num}] 🐛 {message}` → `[TICKET-123] 🐛 Fix`
+---
+### ☑ Templates command
 
+Lists currently available commit templates. To add your own, refer to the [Custom Commit Template guide](#-custom-commit-template-example).
 
+```bash
+git-kit templates
+
+- bug | Fix that resolves an unintended issue
+- ...
+```
+---
 ## ⚙️ Configuration
 
-You can provide your own templates simply by creating your own configuration file [.git-kit.yml](.git-kit.yml), this can be provided to the cli in one of the following ways.
+The [default](./templates/default.yml) template will be set as active initially but you can switch between the [provided configurations](./templates) and any added custom templates via the `config set` command.
+
+```bash
+git-kit config set
+```
+> ℹ️ It's not recommend to alter the default template files as they  could be replaced / updated on new releases.
+> 
+> Instead, copy & paste the desired default template, save it somewhere, and add it to the CLI as shown in the [persist configuration guide](#persist-configuration).
+
+### Custom templates
+Creating your own templates can be done simply by creating your own configuration file [.git-kit.yml](./templates/default.yml).
+
+Here's an example of a custom template called `custom`
+
+```yaml
+version: 1
+commit:
+  templates:
+    custom:
+      description: My custom commit template 🎸
+      content: |
+        {ticket_num} 🤘 {message}
+```
+
+Your custom configuration / templates can be provided to the CLI in one of the following ways:
 
 - Provide a config file path via `--config` option.
 - Create a `.git-kit.yml` config file within your git repositories root directory.
 - Use a config file previously added / linked via `config add` subcommand as highlighted in the [persist configuration guide](#persist-configuration).
-
-Otherwise the [default configuration](.git-kit.yml) will be used. The default config file can also be customized but it's not recommend as the templates could be replaced on any new releases.
-
 
 ### Persist Configuration
 
@@ -133,31 +220,18 @@ You can add multiple config files and switch between them via `set` command.
 ```bash
 git-kit config set $CONFIG_NAME
 ```
-
-If you wish to return to the `default` provided templates you can run one of the following commands.
-
-```bash
-git-kit config set default
-```
+or 
 
 ```bash
-git-kit config reset
+# Select prompt for available configurations
+git-kit config set 
+
+> ? Configuration:  
+  ➜ default
+    conventional
+    custom
 ```
-
-### 🛠 Custom Commit template example
-
-Here's an example of a custom template called 'custom'
-
-```yaml
-commit:
-  templates:
-    custom:
-      description: My custom commit template 🎸
-      content: |
-        {ticket_num} 🤘 {message}
-```
-
-To ensure your template has been loaded simply run 👇 to see a list of the currently configured templates.
+To ensure your template has been loaded simply run the command below 👇 to see a list of the currently configured templates.
 
 ```bash
 git-kit templates
@@ -166,7 +240,7 @@ git-kit templates
 - ...
 ```
 
-Then when your ready use it! 🪂
+Then when your ready to commit your changes use your custom template and your done!  🪂
 
 ```bash
 git-kit commit custom \
