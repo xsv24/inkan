@@ -1,10 +1,12 @@
-on: [push]
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
 
-name: Commit CI
+name: Release and publish
 
 jobs:
-  check:
-    name: check
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -15,10 +17,9 @@ jobs:
           override: true
       - uses: actions-rs/cargo@v1
         with:
-          command: check
+          command: build
 
-  fmt:
-    name: fmt
+  publish-dry:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -27,31 +28,15 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: rustup component add rustfmt
       - uses: actions-rs/cargo@v1
         with:
-          command: fmt
-          args: --all -- --check
+          command: publish
+          args: --dry-run
 
-  clippy:
-    name: clippy
+  publish:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
-
-  test:
-    name: test
-    runs-on: ubuntu-latest
+    env:
+      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -61,6 +46,14 @@ jobs:
           override: true
       - uses: actions-rs/cargo@v1
         with:
-          command: test
-          args: -- --show-output
-    needs: [check, fmt, clippy]
+          # Allows us to use the git tag version as the package version
+          command: install
+          args: cargo-release
+      - name: Update Cargo.toml version
+        run: |
+          TAG_VERSION=$(echo $GITHUB_REF | cut -d '/' -f 3)
+          cargo release version "$TAG_VERSION" --no-confirm --execute
+      # Publish and allow dirty since the Cargo.toml version is changed.
+      - name: Publish package
+        run: cargo publish --token "$CARGO_TOKEN" --allow-dirty
+    needs: [build, publish-dry]

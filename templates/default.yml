@@ -45,4 +45,4 @@ commit:
     ci:
       description: Changes to CI configuration files and scripts
       content: |
-        [{ticket_num}] 🚰 {message}
+        [{ticket_num}] 🏭 {message}
