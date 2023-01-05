@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    domain::adapters::{self, CheckoutStatus},
+    domain::adapters::{self, CheckoutStatus, CommitMsgStatus},
     utils::TryConvert,
 };
 
@@ -22,7 +22,7 @@ impl Git {
 }
 
 impl adapters::Git for Git {
-    fn get_repo_name(&self) -> anyhow::Result<String> {
+    fn repository_name(&self) -> anyhow::Result<String> {
         let repo_dir = self.root_directory()?.try_convert()?;
 
         let repo = repo_dir
@@ -35,7 +35,7 @@ impl adapters::Git for Git {
         Ok(repo.trim().into())
     }
 
-    fn get_branch_name(&self) -> anyhow::Result<String> {
+    fn branch_name(&self) -> anyhow::Result<String> {
         let branch: String = Git::command(&["branch", "--show-current"]).try_convert()?;
         log::info!("current git branch name '{}'", branch);
 
@@ -55,18 +55,48 @@ impl adapters::Git for Git {
         Ok(())
     }
 
-    fn commit(&self, msg: &str) -> anyhow::Result<()> {
-        log::info!("git commit with message '{}'", msg);
-        Git::command(&["commit", "-m", msg, "-e"]).status()?;
-
-        Ok(())
-    }
-
     fn root_directory(&self) -> anyhow::Result<PathBuf> {
         let dir = Git::command(&["rev-parse", "--show-toplevel"]).try_convert()?;
         log::info!("git root directory {}", dir);
 
         Ok(Path::new(dir.trim()).to_owned())
+    }
+
+    fn template_file_path(&self) -> anyhow::Result<PathBuf> {
+        // Template file and stored in the .git directory to avoid users having to adding to their .gitignore
+        // In future maybe we could make our own .git-kit dir to house config / templates along with this.
+        let path = self
+            .root_directory()?
+            .join(".git")
+            .join("GIT_KIT_COMMIT_TEMPLATE");
+
+        Ok(path)
+    }
+
+    fn commit_with_template(
+        &self,
+        template: &Path,
+        completed: CommitMsgStatus,
+    ) -> anyhow::Result<()> {
+        log::info!("commit template with CommitMsgStatus: '{:?}'", completed);
+
+        let template = template
+            .as_os_str()
+            .to_str()
+            .context("Failed to convert path to str.")?;
+
+        let mut args = vec!["commit", "--template", template];
+
+        // Pre-cautionary measure encase 'message' is provided but still matches template exactly.
+        // Otherwise git will just abort the commit if theres no difference / change from the template.
+        if completed == CommitMsgStatus::Completed {
+            log::info!("allowing an empty message on commit");
+            args.push("--allow-empty-message");
+        }
+
+        Git::command(&args).status()?;
+
+        Ok(())
     }
 }
 
@@ -81,7 +111,7 @@ mod tests {
         let git = Git;
 
         // TODO: Find a more testable approach to check stdout maybe?
-        assert_eq!(git.get_repo_name()?, "git-kit");
+        assert_eq!(git.repository_name()?, "git-kit");
 
         Ok(())
     }

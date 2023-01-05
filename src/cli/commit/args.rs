@@ -72,10 +72,7 @@ impl Arguments {
         log::info!("generate commit message for '{}'", &template);
         let branch = context
             .store
-            .get_branch(
-                &context.git.get_branch_name()?,
-                &context.git.get_repo_name()?,
-            )
+            .get_branch(&context.git.branch_name()?, &context.git.repository_name()?)
             .ok();
 
         let (ticket, scope, link) = branch
@@ -102,7 +99,10 @@ mod tests {
     use crate::{
         adapters::sqlite::Sqlite,
         app_config::{AppConfig, CommitConfig, TemplateConfig},
-        domain::{adapters::CheckoutStatus, models::Branch},
+        domain::{
+            adapters::{CheckoutStatus, CommitMsgStatus},
+            models::Branch,
+        },
         migrations::{db_migrations, MigrationContext},
     };
     use fake::{Fake, Faker};
@@ -126,24 +126,32 @@ mod tests {
     }
 
     impl Git for TestCommand {
-        fn get_repo_name(&self) -> anyhow::Result<String> {
+        fn repository_name(&self) -> anyhow::Result<String> {
             Ok(self.repo.to_owned())
         }
 
-        fn get_branch_name(&self) -> anyhow::Result<String> {
+        fn branch_name(&self) -> anyhow::Result<String> {
             Ok(self.branch_name.to_owned())
         }
 
         fn checkout(&self, _name: &str, _status: CheckoutStatus) -> anyhow::Result<()> {
-            todo!()
-        }
-
-        fn commit(&self, _msg: &str) -> anyhow::Result<()> {
-            todo!()
+            panic!("Did not expect Git 'checkout' to be called");
         }
 
         fn root_directory(&self) -> anyhow::Result<PathBuf> {
-            todo!()
+            panic!("Did not expect Git 'root_directory' to be called");
+        }
+
+        fn template_file_path(&self) -> anyhow::Result<PathBuf> {
+            panic!("Did not expect Git 'template_file_path' to be called");
+        }
+
+        fn commit_with_template(
+            &self,
+            _: &std::path::Path,
+            _: CommitMsgStatus,
+        ) -> anyhow::Result<()> {
+            panic!("Did not expect Git 'commit_with_template' to be called");
         }
     }
 

@@ -2,9 +2,10 @@ use crate::{
     app_context::AppContext,
     cli::{checkout, commit, context},
     domain::{
-        adapters::{CheckoutStatus, Git, Store},
+        adapters::{CheckoutStatus, CommitMsgStatus, Git, Store},
         models::Branch,
     },
+    utils::string::OptionStr,
 };
 
 use super::Actor;
@@ -23,8 +24,8 @@ impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
     fn current(&self, args: context::Arguments) -> anyhow::Result<Branch> {
         // We want to store the branch name against and ticket number
         // So whenever we commit we get the ticket number from the branch
-        let repo_name = self.context.git.get_repo_name()?;
-        let branch_name = self.context.git.get_branch_name()?;
+        let repo_name = self.context.git.repository_name()?;
+        let branch_name = self.context.git.branch_name()?;
 
         let branch = Branch::new(&branch_name, &repo_name, args.ticket, args.link, args.scope)?;
         self.context.store.persist_branch(&branch)?;
@@ -47,7 +48,7 @@ impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
 
         // We want to store the branch name against and ticket number
         // So whenever we commit we get the ticket number from the branch
-        let repo_name = self.context.git.get_repo_name()?;
+        let repo_name = self.context.git.repository_name()?;
         let branch = Branch::new(&args.name, &repo_name, args.ticket, args.link, args.scope)?;
         self.context.store.persist_branch(&branch)?;
 
@@ -59,7 +60,19 @@ impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
 
         let contents = args.commit_message(config.content.clone(), self.context)?;
 
-        self.context.git.commit(&contents)?;
+        let template_file = self.context.git.template_file_path()?;
+        std::fs::write(&template_file, &contents)?;
+
+        // Pre-cautionary measure encase 'message' is provided but still matches template exactly.
+        // Otherwise git will just abort the commit if theres no difference / change from the template.
+        let commit_msg_complete = match args.message.none_if_empty() {
+            Some(_) => CommitMsgStatus::Completed,
+            None => CommitMsgStatus::InComplete,
+        };
+
+        self.context
+            .git
+            .commit_with_template(&template_file, commit_msg_complete)?;
 
         Ok(contents)
     }
@@ -68,11 +81,14 @@ impl<'a, C: Git, S: Store> Actor for Actions<'a, C, S> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::env::temp_dir;
+    use std::path::Path;
     use std::path::PathBuf;
 
     use anyhow::anyhow;
     use fake::{Fake, Faker};
     use rusqlite::Connection;
+    use uuid::Uuid;
 
     use crate::adapters::sqlite::Sqlite;
     use crate::app_config::AppConfig;
@@ -313,7 +329,15 @@ mod tests {
             },
         };
 
-        let context = fake_context(GitCommandMock::fake(), config)?;
+        let git_mock = GitCommandMock {
+            commit_res: |_, complete| {
+                assert_eq!(CommitMsgStatus::Completed, complete);
+                Ok(())
+            },
+            ..GitCommandMock::fake()
+        };
+
+        let context = fake_context(git_mock, config)?;
         let actions = Actions::new(&context);
 
         let args = commit::Arguments {
@@ -355,7 +379,15 @@ mod tests {
             },
         };
 
-        let context = fake_context(GitCommandMock::fake(), config)?;
+        let git_mock = GitCommandMock {
+            commit_res: |_, complete| {
+                assert_eq!(CommitMsgStatus::InComplete, complete);
+                Ok(())
+            },
+            ..GitCommandMock::fake()
+        };
+
+        let context = fake_context(git_mock, config)?;
         let actions = Actions::new(&context);
 
         let args = commit::Arguments {
@@ -399,8 +431,8 @@ mod tests {
         let context = fake_context(GitCommandMock::fake(), config)?;
         let actions = Actions::new(&context);
 
-        let branch_name = Some(context.git.get_branch_name()?);
-        let repo_name = Some(context.git.get_repo_name()?);
+        let branch_name = Some(context.git.branch_name()?);
+        let repo_name = Some(context.git.repository_name()?);
         let ticket = None;
         let branch = Branch {
             link: Some(Faker.fake()),
@@ -475,7 +507,8 @@ mod tests {
         repo: Result<String, String>,
         branch_name: Result<String, String>,
         checkout_res: fn(&str, CheckoutStatus) -> anyhow::Result<()>,
-        commit_res: fn(&str) -> anyhow::Result<()>,
+        commit_res: fn(&Path, CommitMsgStatus) -> anyhow::Result<()>,
+        template_file_path: fn() -> anyhow::Result<PathBuf>,
     }
 
     impl GitCommandMock {
@@ -484,20 +517,24 @@ mod tests {
                 repo: Ok(Faker.fake()),
                 branch_name: Ok(Faker.fake()),
                 checkout_res: |_, _| Ok(()),
-                commit_res: |_| Ok(()),
+                commit_res: |_, _| Ok(()),
+                template_file_path: || {
+                    let temp_file = temp_dir().join(Uuid::new_v4().to_string());
+                    Ok(temp_file)
+                },
             }
         }
     }
 
     impl Git for GitCommandMock {
-        fn get_repo_name(&self) -> anyhow::Result<String> {
+        fn repository_name(&self) -> anyhow::Result<String> {
             self.repo
                 .as_ref()
                 .map(|s| s.to_owned())
                 .map_err(|e| anyhow!(e.to_owned()))
         }
 
-        fn get_branch_name(&self) -> anyhow::Result<String> {
+        fn branch_name(&self) -> anyhow::Result<String> {
             self.branch_name
                 .as_ref()
                 .map(|s| s.to_owned())
@@ -508,12 +545,20 @@ mod tests {
             (self.checkout_res)(name, status)
         }
 
-        fn commit(&self, msg: &str) -> anyhow::Result<()> {
-            (self.commit_res)(msg)
+        fn root_directory(&self) -> anyhow::Result<PathBuf> {
+            panic!("Did not expect Git 'root_directory' to be called.");
         }
 
-        fn root_directory(&self) -> anyhow::Result<PathBuf> {
-            todo!()
+        fn template_file_path(&self) -> anyhow::Result<PathBuf> {
+            (self.template_file_path)()
+        }
+
+        fn commit_with_template(
+            &self,
+            template: &Path,
+            complete: CommitMsgStatus,
+        ) -> anyhow::Result<()> {
+            (self.commit_res)(template, complete)
         }
     }
 
