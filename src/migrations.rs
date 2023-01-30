@@ -48,7 +48,7 @@ pub fn db_migrations(
     if let Some(version) = context.version {
         migrations
             .to_version(connection, version)
-            .with_context(|| format!("Failed to apply migration version '{}'", version))?;
+            .with_context(|| format!("Failed to apply migration version '{version}'"))?;
     } else {
         migrations
             .to_latest(connection)
@@ -64,7 +64,7 @@ pub fn db_migrations(
         migrate_default_configuration(config_paths, connection, version)?;
     }
 
-    println!("git-kit migration version '{}'.", version);
+    println!("git-kit migration version '{version}'.");
 
     Ok(migrations)
 }

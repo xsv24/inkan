@@ -1,85 +1,51 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use directories::ProjectDirs;
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
 
 use crate::{
-    domain::models::{Config, ConfigKey},
-    utils::get_file_contents,
+    adapters::{sqlite::Sqlite, Git},
+    domain::{
+        adapters::{Git as _, Store},
+        models::{Config, ConfigKey, ConfigStatus},
+    },
 };
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppConfig {
-    pub commit: CommitConfig,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct CommitConfig {
-    pub templates: HashMap<String, TemplateConfig>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TemplateConfig {
-    pub description: String,
-    pub content: String,
+    pub config: Config,
 }
 
 impl AppConfig {
-    pub fn new(user_config_path: Config, git_root_path: PathBuf) -> anyhow::Result<Self> {
-        let config_path = Self::get_config_path(user_config_path, git_root_path)?;
+    pub fn new(
+        once_off_config_path: Option<String>,
+        git: &Git,
+        store: &Sqlite,
+    ) -> anyhow::Result<AppConfig> {
+        let config = match once_off_config_path {
+            Some(path) => Config::new(ConfigKey::Once, path, ConfigStatus::Active),
+            None => store.get_configuration(None),
+        }?;
 
-        let config_contents = get_file_contents(&config_path)?;
-        let config = serde_yaml::from_str::<AppConfig>(&config_contents)
-            .context("Failed to load 'config.yml' from please ensure yaml is valid.")?;
+        let git_root_dir = git.root_directory()?;
+        let config = Self::map_config_overrides(config, git_root_dir)?;
 
-        Ok(config)
-    }
-
-    fn config_dir() -> anyhow::Result<PathBuf> {
-        let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
-            .context("Failed to retrieve 'git-kit' config")?;
-
-        Ok(project_dir.config_dir().to_owned())
+        Ok(AppConfig { config })
     }
 
     pub fn db_connection() -> anyhow::Result<Connection> {
-        let db_file = Self::config_dir()?.join("db");
+        let db_file = Self::template_config_dir()?.join("db");
 
         let connection = Connection::open(db_file).context("Failed to open sqlite connection")?;
 
         Ok(connection)
     }
 
-    pub fn validate_template(&self, name: &str) -> clap::error::Result<()> {
-        log::info!("validating template {}", name);
+    fn template_config_dir() -> anyhow::Result<PathBuf> {
+        let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
+            .context("Failed to retrieve 'git-kit' config")?;
 
-        if self.commit.templates.contains_key(name) {
-            log::info!("template {} 👌", name);
-            Ok(())
-        } else {
-            // TODO: want a nice error message that shows the templates output
-            Err(clap::Error::raw(
-                clap::error::ErrorKind::InvalidSubcommand,
-                format!("Found invalid subcommand '{}' given", name),
-            ))?
-        }
-    }
-
-    pub fn get_template_config(&self, name: &str) -> clap::error::Result<&TemplateConfig> {
-        log::info!("fetching template {}", name);
-        let template = self.commit.templates.get(name).ok_or_else(|| {
-            clap::Error::raw(
-                clap::error::ErrorKind::MissingSubcommand,
-                format!("Found missing subcommand '{}'", name),
-            )
-        })?;
-
-        Ok(template)
+        Ok(project_dir.config_dir().to_owned())
     }
 
     pub fn join_config_filename(repo_config: &Path) -> PathBuf {
@@ -87,29 +53,33 @@ impl AppConfig {
         repo_config.join(filename)
     }
 
-    fn get_config_path(config: Config, repo_config: PathBuf) -> anyhow::Result<PathBuf> {
+    fn map_config_overrides(config: Config, repo_config: PathBuf) -> anyhow::Result<Config> {
         let repo_config = AppConfig::join_config_filename(&repo_config);
 
-        match (config.key, repo_config.exists()) {
+        match (config.key.clone(), repo_config.exists()) {
             // Once off override takes priority 1
             (ConfigKey::Once, _) => {
                 log::info!("⏳ Loading once off config...");
-                Ok(config.path)
+                Ok(config)
             }
             // Repository has config file priority 2
             (ConfigKey::Local, _) | (_, true) => {
                 log::info!("⏳ Loading local repo config...");
-                Ok(repo_config)
+                Ok(Config {
+                    key: ConfigKey::Local,
+                    path: repo_config,
+                    status: config.status,
+                })
             }
             // User has set custom config file and is active priority 3
             (ConfigKey::User(key), _) => {
                 log::info!("⏳ Loading user '{:?}' config...", key);
-                Ok(config.path)
+                Ok(config)
             }
             // No set user config use provided defaults priority 4
             (ConfigKey::Default, _) => {
                 log::info!("⏳ Loading global config...");
-                Ok(config.path)
+                Ok(config)
             }
         }
     }
@@ -133,7 +103,7 @@ mod tests {
         let once_path = fake_path_buf();
         let valid_repo_dir = git.root_directory()?;
 
-        let config_path = AppConfig::get_config_path(
+        let config = AppConfig::map_config_overrides(
             Config {
                 key: ConfigKey::Once,
                 path: once_path.clone(),
@@ -142,7 +112,9 @@ mod tests {
             valid_repo_dir,
         )?;
 
-        assert_eq!(once_path, config_path);
+        assert_eq!(once_path, config.path);
+        assert_eq!(ConfigKey::Once, config.key);
+        assert_eq!(ConfigStatus::Active, config.status);
 
         Ok(())
     }
@@ -152,11 +124,11 @@ mod tests {
     ) -> anyhow::Result<()> {
         let git: &dyn adapters::Git = &Git;
         let repo_root_with_config = git.root_directory()?;
-        let config = repo_root_with_config.join(".git-kit.yml");
-        std::fs::File::create(&config)?;
+        let config_repo = repo_root_with_config.join(".git-kit.yml");
+        std::fs::File::create(&config_repo)?;
 
         for key in [ConfigKey::Default, ConfigKey::User(Faker.fake())] {
-            let config_dir = AppConfig::get_config_path(
+            let actual = AppConfig::map_config_overrides(
                 Config {
                     key,
                     path: fake_path_buf(),
@@ -165,10 +137,12 @@ mod tests {
                 repo_root_with_config.clone(),
             )?;
 
-            assert_eq!(config_dir, config);
+            assert_eq!(config_repo, actual.path);
+            assert_eq!(ConfigKey::Local, actual.key);
+            assert_eq!(ConfigStatus::Active, actual.status);
         }
 
-        std::fs::remove_file(config)?;
+        std::fs::remove_file(config_repo)?;
 
         Ok(())
     }
@@ -177,17 +151,20 @@ mod tests {
     fn user_sets_config_file_and_no_config_or_once_off_config_priority_3() -> anyhow::Result<()> {
         let user_path = fake_path_buf();
         let repo_non_existing = fake_path_buf();
+        let key = ConfigKey::User(Faker.fake());
 
-        let config_dir = AppConfig::get_config_path(
+        let config = AppConfig::map_config_overrides(
             Config {
-                key: ConfigKey::User(Faker.fake()),
+                key: key.clone(),
                 path: user_path.clone(),
                 status: ConfigStatus::Active,
             },
             repo_non_existing,
         )?;
 
-        assert_eq!(user_path, config_dir);
+        assert_eq!(key, config.key);
+        assert_eq!(user_path, config.path);
+        assert_eq!(ConfigStatus::Active, config.status);
 
         Ok(())
     }
@@ -197,7 +174,7 @@ mod tests {
         let default_path = fake_path_buf();
         let repo_non_existing = fake_path_buf();
 
-        let config_dir = AppConfig::get_config_path(
+        let config = AppConfig::map_config_overrides(
             Config {
                 key: ConfigKey::Default,
                 path: default_path.clone(),
@@ -206,7 +183,10 @@ mod tests {
             repo_non_existing,
         )?;
 
-        assert_eq!(default_path, config_dir);
+        assert_eq!(default_path, config.path);
+        assert_eq!(ConfigKey::Default, config.key);
+        assert_eq!(ConfigStatus::Active, config.status);
+
         Ok(())
     }
 

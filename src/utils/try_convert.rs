@@ -26,6 +26,7 @@ impl TryConvert<String> for PathBuf {
         let path = self
             .to_str()
             .context("Failed to convert path into string")?;
+
         Ok(path.into())
     }
 }

@@ -1,11 +1,22 @@
-use crate::{app_config::AppConfig, domain::commands::Actor};
+use crate::{
+    app_context::AppContext,
+    domain::{
+        adapters::{prompt::Prompter, Git, Store},
+        commands::commit,
+    },
+    template_config::TemplateConfig,
+};
 
 use super::Arguments;
 
-pub fn handler(actions: &dyn Actor, config: &AppConfig, args: Arguments) -> anyhow::Result<()> {
-    config.validate_template(&args.template)?;
-    // TODO: Could we do a prompt if no ticket / args found ?
-    actions.commit(args)?;
+pub fn handler<G: Git, S: Store, P: Prompter>(
+    context: &AppContext<G, S>,
+    args: Arguments,
+    prompter: P,
+) -> anyhow::Result<()> {
+    let templates = TemplateConfig::new(&context.config.path)?;
+    let commit = args.try_into_domain(&templates, prompter)?;
+    commit::handler(&context.git, &context.store, commit)?;
 
     Ok(())
 }

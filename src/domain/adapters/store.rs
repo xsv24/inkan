@@ -7,7 +7,7 @@ pub trait Store {
 
     fn persist_config(&self, config: &Config) -> anyhow::Result<()>;
 
-    fn set_active_config(&mut self, key: ConfigKey) -> anyhow::Result<Config>;
+    fn set_active_config(&mut self, key: &ConfigKey) -> anyhow::Result<Config>;
 
     fn get_configurations(&self) -> anyhow::Result<Vec<Config>>;
 

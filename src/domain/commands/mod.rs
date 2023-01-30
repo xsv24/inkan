@@ -1,5 +1,3 @@
-pub mod actions;
-mod actor;
-
-pub use actions::Actions;
-pub use actor::Actor;
+pub mod checkout;
+pub mod commit;
+pub mod context;
