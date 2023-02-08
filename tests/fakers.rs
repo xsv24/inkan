@@ -12,6 +12,7 @@ use git_kit::{
         adapters::{CheckoutStatus, CommitMsgStatus, Git},
         models::{Config, ConfigStatus},
     },
+    entry::Interactive,
     migrations::{db_migrations, MigrationContext},
 };
 use rusqlite::Connection;
@@ -40,6 +41,7 @@ pub fn fake_context<'a, C: Git>(git: C, config: Config) -> anyhow::Result<AppCon
         store: Sqlite::new(connection)?,
         config,
         git,
+        interactive: Interactive::Enable,
     };
 
     Ok(context)

@@ -3,7 +3,7 @@ use crate::domain::{
     models::Branch,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Checkout {
     /// Name of the branch to checkout or create.
     pub name: String,

@@ -1,19 +1,23 @@
 use crate::{
-    adapters::prompt::Prompt,
     app_context::AppContext,
     domain::{
-        adapters::{Git, Store},
+        adapters::{prompt::Prompter, Git, Store},
         commands::context,
     },
 };
 
 use super::Arguments;
 
-pub fn handler<G: Git, S: Store>(
+pub fn handler<G: Git, S: Store, P: Prompter>(
     context: &AppContext<G, S>,
     args: Arguments,
+    prompt: P,
 ) -> anyhow::Result<()> {
-    context::handler(&context.git, &context.store, args.try_into_domain(Prompt)?)?;
+    context::handler(
+        &context.git,
+        &context.store,
+        args.try_into_domain(prompt, &context.interactive)?,
+    )?;
 
     Ok(())
 }

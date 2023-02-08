@@ -237,6 +237,7 @@ impl<'a> TryFrom<&Row<'a>> for Branch {
 mod tests {
     use std::{collections::HashMap, path::Path};
 
+    use crate::entry::Interactive;
     use crate::{adapters::Git, app_context::AppContext, domain::adapters::Store};
 
     use crate::migrations::{db_migrations, MigrationContext};
@@ -333,6 +334,7 @@ mod tests {
             store,
             git: Git,
             config: fake_config(),
+            interactive: Interactive::Enable,
         };
 
         let keys = branches.keys().cloned().collect::<Vec<String>>();
@@ -363,6 +365,7 @@ mod tests {
             store: Sqlite::new(setup_db()?)?,
             git: Git,
             config: fake_config(),
+            interactive: Interactive::Enable,
         };
 
         // Insert random collection of branches.

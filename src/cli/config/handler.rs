@@ -1,6 +1,7 @@
 use crate::domain::adapters::prompt::Prompter;
 use crate::domain::adapters::Store;
 use crate::domain::models::{ConfigKey, ConfigStatus};
+use crate::entry::Interactive;
 
 use super::Arguments;
 use colored::Colorize;
@@ -10,6 +11,7 @@ pub fn handler<S: Store, P: Prompter>(
     config_key: &ConfigKey,
     arguments: Arguments,
     prompt: P,
+    interactive: &Interactive,
 ) -> anyhow::Result<()> {
     local_config_warning(config_key)?;
 
@@ -20,7 +22,7 @@ pub fn handler<S: Store, P: Prompter>(
             println!("🟢 {} (Active)", config.key.to_string().green());
         }
         Arguments::Set(args) => {
-            let key = args.try_into_domain(store, prompt)?;
+            let key = args.try_into_domain(store, prompt, interactive)?;
             store.set_active_config(&key)?;
             println!("🟢 {} (Active)", key.to_string().green());
         }

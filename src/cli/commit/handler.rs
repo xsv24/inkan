@@ -15,7 +15,7 @@ pub fn handler<G: Git, S: Store, P: Prompter>(
     prompter: P,
 ) -> anyhow::Result<()> {
     let templates = TemplateConfig::new(&context.config.path)?;
-    let commit = args.try_into_domain(&templates, prompter)?;
+    let commit = args.try_into_domain(&templates, prompter, &context.interactive)?;
     commit::handler(&context.git, &context.store, commit)?;
 
     Ok(())

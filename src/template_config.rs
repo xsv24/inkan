@@ -42,3 +42,32 @@ impl TemplateConfig {
         Ok(template)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::template_config::{CommitConfig, Template, TemplateConfig};
+    use fake::{Fake, Faker};
+    use std::collections::HashMap;
+
+    #[test]
+    fn get_template_config_by_name_key() -> anyhow::Result<()> {
+        let key: String = Faker.fake();
+
+        let config = TemplateConfig {
+            commit: CommitConfig {
+                templates: HashMap::from([(
+                    key.clone(),
+                    Template {
+                        description: key.clone(),
+                        content: key.clone(),
+                    },
+                )]),
+            },
+        };
+
+        let template_config = config.get_template_config(&key)?;
+        assert_eq!(key, template_config.description);
+
+        Ok(())
+    }
+}

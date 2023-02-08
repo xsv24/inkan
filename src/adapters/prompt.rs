@@ -1,13 +1,15 @@
 use std::fmt::Display;
 
-use anyhow::Ok;
 use colored::Colorize;
 use inquire::{
     ui::{Color, RenderConfig, Styled},
-    Select,
+    Select, Text,
 };
 
-use crate::domain::adapters::prompt::{Prompter, SelectItem};
+use crate::{
+    domain::adapters::prompt::{Prompter, SelectItem},
+    utils::string::OptionStr,
+};
 
 impl<T> Display for SelectItem<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -54,5 +56,10 @@ impl Prompter for Prompt {
         };
 
         Ok(select.prompt()?)
+    }
+
+    fn text(&self, question: &str) -> anyhow::Result<Option<String>> {
+        let result = Text::new(question).prompt_skippable()?;
+        Ok(result.none_if_empty())
     }
 }

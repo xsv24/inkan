@@ -5,7 +5,15 @@ use crate::app_config::AppConfig;
 use crate::app_context::AppContext;
 use crate::cli::{commands::Commands, log::LogLevel};
 use anyhow::{Context, Ok};
+use clap::clap_derive::ArgEnum;
 use clap::Parser;
+
+#[derive(Clone, Debug, ArgEnum, Default, PartialEq, Eq)]
+pub enum Interactive {
+    #[default]
+    Enable,
+    Disable,
+}
 
 #[derive(Debug, Parser)]
 #[clap(name = "git-kit")]
@@ -20,6 +28,10 @@ pub struct Cli {
     /// Log level
     #[clap(arg_enum, long, default_value_t=LogLevel::None)]
     log: LogLevel,
+
+    /// Interactive prompts
+    #[clap(arg_enum, short, long, default_value_t=Interactive::Enable)]
+    prompt: Interactive,
 
     /// Commands
     #[clap(subcommand)]
@@ -37,7 +49,7 @@ impl Cli {
 
         let app_config = AppConfig::new(self.config.clone(), &git, &store)?;
 
-        let context = AppContext::new(git, store, app_config.config)?;
+        let context = AppContext::new(git, store, app_config.config, self.prompt.clone())?;
 
         Ok(context)
     }

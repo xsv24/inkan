@@ -3,7 +3,7 @@ use crate::domain::{
     models::Branch,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context {
     /// Issue ticket number related to the current branch.
     pub ticket: Option<String>,

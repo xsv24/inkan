@@ -1,7 +1,7 @@
 use crate::{
     domain::{models::Branch, template::Templator},
     template_config::Template,
-    utils::{merge, string::OptionStr},
+    utils::string::OptionStr,
 };
 
 #[derive(Debug, Clone)]
@@ -23,8 +23,13 @@ impl Commit {
             .map(|branch| (Some(branch.ticket), branch.scope, branch.link))
             .unwrap_or((None, None, None));
 
-        let ticket = merge(self.ticket.clone().none_if_empty(), ticket.none_if_empty());
-        let scope = merge(self.scope.clone().none_if_empty(), scope.none_if_empty());
+        let ticket = self
+            .ticket
+            .clone()
+            .none_if_empty()
+            .or_else(|| ticket.none_if_empty());
+
+        let scope = self.scope.clone().none_if_empty().or(scope.none_if_empty());
 
         let contents = template
             .replace_or_remove("ticket_num", ticket)?
@@ -41,11 +46,7 @@ mod tests {
     use fake::{Fake, Faker};
 
     use super::*;
-    use crate::{
-        domain::models::Branch,
-        template_config::{CommitConfig, Template, TemplateConfig},
-    };
-    use std::collections::HashMap;
+    use crate::{domain::models::Branch, template_config::Template};
 
     #[derive(Clone)]
     struct TestCommand {
@@ -204,27 +205,5 @@ mod tests {
             message: Faker.fake(),
             scope: Faker.fake(),
         }
-    }
-
-    #[test]
-    fn get_template_config_by_name_key() -> anyhow::Result<()> {
-        let key: String = Faker.fake();
-
-        let config = TemplateConfig {
-            commit: CommitConfig {
-                templates: HashMap::from([(
-                    key.clone(),
-                    Template {
-                        description: key.clone(),
-                        content: key.clone(),
-                    },
-                )]),
-            },
-        };
-
-        let template_config = config.get_template_config(&key)?;
-        assert_eq!(key, template_config.description);
-
-        Ok(())
     }
 }

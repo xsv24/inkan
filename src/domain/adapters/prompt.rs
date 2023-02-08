@@ -5,6 +5,8 @@ pub struct SelectItem<T> {
 }
 
 pub trait Prompter {
+    fn text(&self, question: &str) -> anyhow::Result<Option<String>>;
+
     fn select<T>(
         &self,
         question: &str,
