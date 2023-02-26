@@ -13,11 +13,14 @@ pub fn handler<G: Git, S: Store, P: Prompter>(
     args: Arguments,
     prompt: P,
 ) -> anyhow::Result<()> {
-    context::handler(
-        &context.git,
-        &context.store,
-        args.try_into_domain(prompt, &context.interactive)?,
-    )?;
+    let branch = context
+        .store
+        .get_branch(&context.git.branch_name()?, &context.git.repository_name()?)
+        .ok();
+
+    let args = args.try_into_domain(prompt, &context.interactive, branch)?;
+
+    context::handler(&context.git, &context.store, args)?;
 
     Ok(())
 }

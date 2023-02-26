@@ -234,7 +234,7 @@ mod tests {
     }
 
     impl Prompter for PromptTest {
-        fn text(&self, _: &str) -> anyhow::Result<Option<String>> {
+        fn text(&self, _: &str, _: Option<String>) -> anyhow::Result<Option<String>> {
             match &self.text_result {
                 Ok(option) => Ok(option.clone()),
                 Err(_) => Err(anyhow::anyhow!("Text prompt failed")),

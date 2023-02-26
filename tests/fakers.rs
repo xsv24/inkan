@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use chrono::Utc;
 use std::{
     env::temp_dir,
     path::{Path, PathBuf},
@@ -10,7 +11,7 @@ use git_kit::{
     app_context::AppContext,
     domain::{
         adapters::{CheckoutStatus, CommitMsgStatus, Git},
-        models::{Config, ConfigStatus},
+        models::{Branch, Config, ConfigStatus},
     },
     entry::Interactive,
     migrations::{db_migrations, MigrationContext},
@@ -45,6 +46,18 @@ pub fn fake_context<'a, C: Git>(git: C, config: Config) -> anyhow::Result<AppCon
     };
 
     Ok(context)
+}
+
+#[allow(dead_code)]
+pub fn fake_branch() -> Branch {
+    Branch {
+        name: Faker.fake(),
+        ticket: Faker.fake(),
+        created: Utc::now(),
+        data: Faker.fake(),
+        link: Faker.fake(),
+        scope: Faker.fake(),
+    }
 }
 
 #[derive(Clone)]

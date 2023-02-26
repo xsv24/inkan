@@ -1,7 +1,7 @@
 use clap::Args;
 
 use crate::{
-    domain::{adapters::prompt::Prompter, commands::context::Context},
+    domain::{adapters::prompt::Prompter, commands::context::Context, models::Branch},
     entry::Interactive,
     utils::or_else_try::OrElseTry,
 };
@@ -22,17 +22,41 @@ pub struct Arguments {
 }
 
 impl Arguments {
+    pub fn try_prompt_with_defaults<P: Prompter>(
+        &self,
+        branch: Option<Branch>,
+        prompt: P,
+    ) -> anyhow::Result<Context> {
+        let ticket = self
+            .ticket
+            .clone()
+            .or_else_try(|| prompt.text("Ticket:", branch.clone().map(|b| b.ticket)))?;
+
+        let scope = self
+            .scope
+            .clone()
+            .or_else_try(|| prompt.text("Scope:", branch.clone().and_then(|b| b.scope)))?;
+
+        let link = self
+            .link
+            .clone()
+            .or_else_try(|| prompt.text("Link:", branch.and_then(|b| b.link)))?;
+
+        Ok(Context {
+            ticket,
+            scope,
+            link,
+        })
+    }
+
     pub fn try_into_domain<P: Prompter>(
         &self,
         prompt: P,
         interactive: &Interactive,
+        branch: Option<Branch>,
     ) -> anyhow::Result<Context> {
         let domain = match interactive {
-            Interactive::Enable => Context {
-                ticket: self.ticket.clone().or_else_try(|| prompt.text("Ticket:"))?,
-                scope: self.scope.clone().or_else_try(|| prompt.text("Scope:"))?,
-                link: self.link.clone().or_else_try(|| prompt.text("Link:"))?,
-            },
+            Interactive::Enable => self.try_prompt_with_defaults(branch, prompt)?,
             Interactive::Disable => Context {
                 ticket: self.ticket.clone(),
                 scope: self.scope.clone(),
@@ -63,7 +87,7 @@ mod tests {
 
         let actual = args
             .clone()
-            .try_into_domain(prompt, &Interactive::Disable)?;
+            .try_into_domain(prompt, &Interactive::Disable, None)?;
 
         let expected = Context {
             ticket: args.ticket.clone(),
@@ -92,7 +116,9 @@ mod tests {
             text_result: Ok(text_prompt.clone()),
         };
 
-        let actual = args.clone().try_into_domain(prompt, &Interactive::Enable)?;
+        let actual = args
+            .clone()
+            .try_into_domain(prompt, &Interactive::Enable, None)?;
 
         let expected = Context {
             ticket: text_prompt.clone(),
@@ -119,7 +145,9 @@ mod tests {
             text_result: Err(anyhow::anyhow!("text should not be called")),
         };
 
-        let actual = args.clone().try_into_domain(prompt, &Interactive::Enable)?;
+        let actual = args
+            .clone()
+            .try_into_domain(prompt, &Interactive::Enable, None)?;
 
         let expected = Context {
             ticket: args.ticket.clone(),
@@ -138,7 +166,7 @@ mod tests {
     }
 
     impl Prompter for PromptTest {
-        fn text(&self, _: &str) -> anyhow::Result<Option<String>> {
+        fn text(&self, _: &str, _: Option<String>) -> anyhow::Result<Option<String>> {
             match &self.text_result {
                 Ok(option) => Ok(option.clone()),
                 Err(_) => Err(anyhow::anyhow!("Text prompt failed")),

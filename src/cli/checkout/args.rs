@@ -35,9 +35,18 @@ impl Arguments {
         let domain = match interactive {
             Interactive::Enable => Checkout {
                 name: self.name.clone(),
-                ticket: self.ticket.clone().or_else_try(|| prompt.text("Ticket:"))?,
-                scope: self.scope.clone().or_else_try(|| prompt.text("Scope:"))?,
-                link: self.link.clone().or_else_try(|| prompt.text("Link:"))?,
+                ticket: self
+                    .ticket
+                    .clone()
+                    .or_else_try(|| prompt.text("Ticket:", None))?,
+                scope: self
+                    .scope
+                    .clone()
+                    .or_else_try(|| prompt.text("Scope:", None))?,
+                link: self
+                    .link
+                    .clone()
+                    .or_else_try(|| prompt.text("Link:", None))?,
             },
             Interactive::Disable => Checkout {
                 name: self.name.clone(),
@@ -149,7 +158,7 @@ mod tests {
     }
 
     impl Prompter for PromptTest {
-        fn text(&self, _: &str) -> anyhow::Result<Option<String>> {
+        fn text(&self, _: &str, _: Option<String>) -> anyhow::Result<Option<String>> {
             match &self.text_result {
                 Ok(option) => Ok(option.clone()),
                 Err(_) => Err(anyhow::anyhow!("Text prompt failed")),
