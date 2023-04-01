@@ -1,13 +1,10 @@
-use anyhow::{anyhow, Context};
-use chrono::{DateTime, Utc};
-use rusqlite::{types::Type, Connection, Row, Transaction};
+use anyhow::anyhow;
+use rusqlite::{Connection, Transaction};
 
-use crate::{
-    domain::{
-        self,
-        models::{Branch, Config, ConfigKey, ConfigStatus},
-    },
-    utils::TryConvert,
+use crate::domain::{
+    self,
+    errors::PersistError,
+    models::{Branch, Config, ConfigKey, ConfigStatus},
 };
 
 pub struct Sqlite {
@@ -15,22 +12,22 @@ pub struct Sqlite {
 }
 
 impl Sqlite {
-    pub fn new(connection: Connection) -> anyhow::Result<Sqlite> {
-        Ok(Sqlite { connection })
+    pub fn new(connection: Connection) -> Sqlite {
+        Sqlite { connection }
     }
 
-    pub fn transaction(&mut self) -> anyhow::Result<Transaction> {
-        let transaction = self
-            .connection
-            .transaction()
-            .context("Failed to open transaction for sqlite db.")?;
+    pub fn transaction(&mut self) -> Result<Transaction, PersistError> {
+        let transaction = self.connection.transaction().map_err(|e| {
+            log::error!("Failed to open transaction for sqlite db: {}", &e);
+            PersistError::Unknown(e.into())
+        })?;
 
         Ok(transaction)
     }
 }
 
 impl domain::adapters::Store for Sqlite {
-    fn persist_branch(&self, branch: &Branch) -> anyhow::Result<()> {
+    fn persist_branch(&self, branch: &Branch) -> Result<(), PersistError> {
         log::info!(
             "insert or update for '{}' branch with ticket '{}'",
             branch.name,
@@ -49,12 +46,12 @@ impl domain::adapters::Store for Sqlite {
                     &branch.scope
                 ),
             )
-            .with_context(|| format!("Failed to update branch '{}'", &branch.name))?;
+            .map_err(|e| PersistError::into_branch_error(format!("Failed to update branch '{}'", branch.name), e))?;
 
         Ok(())
     }
 
-    fn get_branch(&self, branch: &str, repo: &str) -> anyhow::Result<Branch> {
+    fn get_branch(&self, branch: &str, repo: &str) -> Result<Branch, PersistError> {
         let name = format!("{}-{}", repo.trim(), branch.trim());
 
         log::info!(
@@ -63,38 +60,38 @@ impl domain::adapters::Store for Sqlite {
             repo
         );
 
-        let branch = self.connection.query_row(
-            "SELECT name, ticket, data, created, link, scope FROM branch where name = ?",
-            [name],
-            |row| Branch::try_from(row),
-        )?;
+        let branch = self
+            .connection
+            .query_row(
+                "SELECT name, ticket, data, created, link, scope FROM branch where name = ?",
+                [name],
+                |row| Branch::try_from(row),
+            )
+            .map_err(|e| {
+                PersistError::into_branch_error("Failed to retrieve branch '{name}'", e)
+            })?;
 
         Ok(branch)
     }
 
-    fn persist_config(&self, config: &Config) -> anyhow::Result<()> {
-        if config.key == ConfigKey::Default {
-            anyhow::bail!("Cannot override 'default' config!");
-        }
-
+    fn persist_config(&self, config: &Config) -> Result<(), PersistError> {
         let key: String = config.key.clone().into();
-        let path = (&config.path).try_convert()?;
+        let path: String = config.path.to_string();
 
         log::info!("insert or update user config '{}' path '{}'", &key, &path);
 
         self.connection
             .execute(
                 "REPLACE INTO config (key, path, status) VALUES (?1, ?2, ?3)",
-                (key, path, String::from(ConfigStatus::Active)),
+                (key, path, String::from(ConfigStatus::Disabled)),
             )
-            .context("Failed to update config.")?;
+            .map_err(|e| PersistError::into_config_error("Failed to update config.", e))?;
 
         Ok(())
     }
 
-    fn set_active_config(&mut self, key: &ConfigKey) -> anyhow::Result<Config> {
+    fn set_active_config(&mut self, key: &ConfigKey) -> Result<Config, PersistError> {
         let transaction = self.transaction()?;
-
         let key: String = key.to_owned().into();
 
         let (active, disabled) = (
@@ -105,7 +102,9 @@ impl domain::adapters::Store for Sqlite {
         // Check the record actually exists before changing statuses.
         transaction
             .query_row("SELECT * FROM config where key = ?1;", [&key], |_| Ok(()))
-            .with_context(|| format!("Configuration '{}' does not exist.", &key))?;
+            .map_err(|e| {
+                PersistError::into_config_error(format!("Configuration '{key}' does not exist."), e)
+            })?;
 
         // Update any 'ACTIVE' config to 'DISABLED'
         transaction
@@ -113,7 +112,12 @@ impl domain::adapters::Store for Sqlite {
                 "UPDATE config SET status = ?1 WHERE status = ?2;",
                 (&disabled, &active),
             )
-            .with_context(|| format!("Failed to set any '{disabled}' config to '{active}'."))?;
+            .map_err(|e| {
+                PersistError::into_config_error(
+                    format!("Failed to set any '{disabled}' config to '{active}'."),
+                    e,
+                )
+            })?;
 
         // Update the desired config to 'ACTIVE'
         transaction
@@ -121,43 +125,59 @@ impl domain::adapters::Store for Sqlite {
                 "UPDATE config SET status = ?1 WHERE key = ?2;",
                 (&active, &key),
             )
-            .with_context(|| format!("Failed to update config status to '{active}'."))?;
+            .map_err(|e| {
+                PersistError::into_config_error(
+                    format!("Failed to update config status to '{active}'."),
+                    e,
+                )
+            })?;
 
-        transaction
-            .commit()
-            .context("Failed to commit transaction to update config")?;
+        transaction.commit().map_err(|e| {
+            PersistError::into_config_error("Failed to commit transaction to update config", e)
+        })?;
 
         self.get_configuration(Some(key))
+            .map_err(|e| PersistError::Validation {
+                name: "config".into(),
+                source: e.into(),
+            })
     }
 
-    fn get_configuration(&self, key: Option<String>) -> anyhow::Result<Config> {
-        let config = match key {
-            Some(key) => {
-                self.connection
-                    .query_row("SELECT * FROM config WHERE key = ?1", [key], |row| {
-                        Config::try_from(row)
-                    })
-            }
-            None => self.connection.query_row(
-                "SELECT * FROM config WHERE status = ?1",
-                [String::from(ConfigStatus::Active)],
-                |row| Config::try_from(row),
-            ),
-        }?;
-
-        Ok(config)
+    // TODO: split this out into separate functions get_config_by_id & get_config_by_status
+    fn get_configuration(&self, key: Option<String>) -> Result<Config, PersistError> {
+        match key {
+            Some(key) => self
+                .connection
+                .query_row("SELECT * FROM config WHERE key = ?1", [key], |row| {
+                    Config::try_from(row)
+                })
+                .map_err(|e| {
+                    PersistError::into_config_error("Failed to retrieve config '{key}'.", e)
+                }),
+            None => self
+                .connection
+                .query_row(
+                    "SELECT * FROM config WHERE status = ?1",
+                    [String::from(ConfigStatus::Active)],
+                    |row| Config::try_from(row),
+                )
+                .map_err(|e| {
+                    PersistError::into_config_error("Failed to retrieve 'active' config.", e)
+                }),
+        }
     }
 
-    fn get_configurations(&self) -> anyhow::Result<Vec<Config>> {
-        let mut statement = self.connection.prepare("SELECT * FROM config")?;
+    fn get_configurations(&self) -> Result<Vec<Config>, PersistError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT * FROM config")
+            .map_err(|e| PersistError::into_config_error("Failed to retrieve configs", e))?;
 
         let configs: Vec<_> = statement
-            .query_map([], |row| {
-                let config = Config::try_from(row)?;
-                Ok(config)
-            })?
-            .into_iter()
-            .collect::<Result<_, _>>()?;
+            .query_map([], |row| Config::try_from(row))
+            .map_err(|e| PersistError::into_config_error("Failed to retrieve configs", e))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| PersistError::into_config_error("Failed to retrieve configs", e))?;
 
         Ok(configs)
     }
@@ -173,76 +193,20 @@ impl domain::adapters::Store for Sqlite {
     }
 }
 
-impl<'a> TryFrom<&Row<'a>> for Config {
-    type Error = rusqlite::Error;
-
-    fn try_from(value: &Row) -> Result<Self, Self::Error> {
-        let status = value.get::<_, String>(2)?.try_into().map_err(|e| {
-            log::error!(
-                "Corrupted data failed to convert to valid config status, {}",
-                e
-            );
-            rusqlite::Error::InvalidColumnType(
-                2,
-                "Failed to convert to valid config status".into(),
-                Type::Text,
-            )
-        })?;
-
-        let config = Config::new(
-            ConfigKey::from(value.get::<_, String>(0)?),
-            value.get::<_, String>(1)?,
-            status,
-        )
-        .map_err(|e| {
-            log::error!("Corrupted data failed to convert 'Config', {}", e);
-
-            rusqlite::Error::ExecuteReturnedResults
-        })?;
-
-        Ok(config)
-    }
-}
-
-impl<'a> TryFrom<&Row<'a>> for Branch {
-    type Error = rusqlite::Error;
-
-    fn try_from(value: &Row) -> Result<Self, Self::Error> {
-        let date = value.get::<usize, String>(3)?;
-        let created = DateTime::parse_from_rfc3339(&date)
-            .map_err(|e| {
-                log::error!("Corrupted data failed to convert to datetime, {}", e);
-                rusqlite::Error::InvalidColumnType(
-                    0,
-                    "Failed to convert string to DateTime".into(),
-                    Type::Text,
-                )
-            })?
-            .with_timezone(&Utc);
-
-        let branch = Branch {
-            name: value.get(0)?,
-            ticket: value.get(1)?,
-            data: value.get(2)?,
-            created,
-            link: value.get(4)?,
-            scope: value.get(5)?,
-        };
-
-        Ok(branch)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, path::Path};
 
+    use crate::adapters::git::{Git, GitCommand};
+    use crate::domain::models::path::AbsolutePath;
     use crate::entry::Interactive;
-    use crate::{adapters::Git, app_context::AppContext, domain::adapters::Store};
+    use crate::{app_context::AppContext, domain::adapters::Store};
 
     use crate::migrations::{db_migrations, MigrationContext};
 
     use super::*;
+    use anyhow::Context;
+    use chrono::{DateTime, Utc};
     use fake::{Fake, Faker};
 
     #[test]
@@ -250,7 +214,7 @@ mod tests {
         // Arrange
         let branch = fake_branch(None, None)?;
         let connection = setup_db()?;
-        let store = Sqlite::new(connection)?;
+        let store = Sqlite::new(connection);
 
         // Act
         store.persist_branch(&branch)?;
@@ -272,17 +236,7 @@ mod tests {
         let connection = setup_db()?;
         let store = Sqlite { connection };
 
-        store.connection.execute(
-            "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            (
-                &branch.name,
-                &branch.ticket,
-                &branch.data,
-                &branch.created.to_rfc3339(),
-                &branch.link,
-                &branch.scope
-            ),
-        )?;
+        insert_branch(&store.connection, &branch);
 
         let updated_branch = Branch {
             name: branch.name,
@@ -317,22 +271,12 @@ mod tests {
             let branch = fake_branch(Some(name.clone()), Some(repo.clone()))?;
             branches.insert(name, branch.clone());
 
-            store.connection.execute(
-                "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                (
-                    &branch.name,
-                    &branch.ticket,
-                    &branch.data,
-                    &branch.created.to_rfc3339(),
-                    &branch.link,
-                    &branch.scope
-                ),
-            ).unwrap();
+            insert_branch(&store.connection, &branch);
         }
 
         let context = AppContext {
             store,
-            git: Git,
+            git: Git { git: GitCommand },
             config: fake_config(),
             interactive: Interactive::Enable,
         };
@@ -359,11 +303,70 @@ mod tests {
     }
 
     #[test]
+    fn attempt_to_get_non_existent_branch_throws_not_found() {
+        // Arrange
+        let connection = setup_db().unwrap();
+        let store = Sqlite { connection };
+
+        let random_key = Faker.fake::<String>();
+        let repo = Faker.fake::<String>();
+
+        let context = AppContext {
+            store,
+            git: Git { git: GitCommand },
+            config: fake_config(),
+            interactive: Interactive::Enable,
+        };
+
+        // Act
+        let error = context.store.get_branch(&random_key, &repo).unwrap_err();
+        context.close().unwrap();
+
+        // Assert
+        assert!(matches!(error, PersistError::NotFound { name } if name == "branch" ));
+    }
+
+    #[test]
+    fn invalid_stored_created_date_returns_corrupted_error() {
+        // Arrange
+        let connection = setup_db().unwrap();
+        let store = Sqlite { connection };
+        let name = Faker.fake::<String>();
+        let repo = Faker.fake::<String>();
+        let key = format!("{}-{}", repo.trim(), name.trim());
+
+        store.connection.execute(
+            "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (
+                &key,
+                &Faker.fake::<String>(),
+                None::<Vec<u8>>,
+                "invalid_date",
+                &Faker.fake::<String>(),
+                &Faker.fake::<String>()
+            )
+        ).unwrap();
+
+        let context = AppContext {
+            store,
+            git: Git { git: GitCommand },
+            config: fake_config(),
+            interactive: Interactive::Enable,
+        };
+        // Act
+        let error = context.store.get_branch(&name, &repo).unwrap_err();
+        context.close().unwrap();
+
+        // Assert
+        assert!(matches!(error, PersistError::Corrupted { name, .. } if name == "branch" ));
+    }
+
+    #[test]
     fn get_branch_trims_branch_name_before_retrieving() -> anyhow::Result<()> {
         // Arrange
         let context = AppContext {
-            store: Sqlite::new(setup_db()?)?,
-            git: Git,
+            store: Sqlite::new(setup_db()?),
+            git: Git { git: GitCommand },
             config: fake_config(),
             interactive: Interactive::Enable,
         };
@@ -373,17 +376,7 @@ mod tests {
         let repo = Faker.fake::<String>();
         let expected = fake_branch(Some(name.clone()), Some(repo.clone()))?;
 
-        context.store.connection.execute(
-            "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            (
-                &expected.name,
-                &expected.ticket,
-                &expected.data,
-                &expected.created.to_rfc3339(),
-                &expected.link,
-                &expected.scope
-            ),
-        )?;
+        insert_branch(&context.store.connection, &expected);
 
         // Act
         let actual = context.store.get_branch(&format!(" {}\n", name), &repo)?;
@@ -398,9 +391,13 @@ mod tests {
     #[test]
     fn persist_config_creates_a_new_item_if_not_exists() -> anyhow::Result<()> {
         // Arrange
-        let config = fake_config();
+        let config = Config {
+            status: ConfigStatus::Disabled,
+            ..fake_config()
+        };
+
         let connection = setup_db()?;
-        let store = Sqlite::new(connection)?;
+        let store = Sqlite::new(connection);
 
         // Act
         store.persist_config(&config)?;
@@ -422,7 +419,7 @@ mod tests {
         let connection = setup_db()?;
         insert_config(&connection, &config)?;
 
-        let store = Sqlite::new(connection)?;
+        let store = Sqlite::new(connection);
 
         // Act
         let config = Config {
@@ -450,7 +447,7 @@ mod tests {
             insert_config(&connection, config)?;
         }
 
-        let store = Sqlite::new(connection)?;
+        let store = Sqlite::new(connection);
 
         // Act
         let configs = store.get_configurations()?;
@@ -461,13 +458,25 @@ mod tests {
     }
 
     #[test]
+    fn with_no_stored_configs_an_empty_list_is_returned() {
+        // Arrange
+        let connection = setup_db().unwrap();
+        let store = Sqlite::new(connection);
+
+        // Act
+        let configs = store.get_configurations().unwrap();
+
+        assert!(configs.is_empty());
+    }
+
+    #[test]
     fn get_config_by_key_success() -> anyhow::Result<()> {
         // Arrange
         let expected = fake_config();
         let connection = setup_db()?;
         insert_config(&connection, &expected)?;
 
-        let store = Sqlite::new(connection)?;
+        let store = Sqlite::new(connection);
 
         // Act
         let config = store
@@ -481,6 +490,22 @@ mod tests {
     }
 
     #[test]
+    fn get_config_by_key_that_does_not_exist() {
+        // Arrange
+        let expected = fake_config();
+        let connection = setup_db().unwrap();
+        let store = Sqlite::new(connection);
+
+        // Act
+        let error = store
+            .get_configuration(Some(expected.key.clone().into()))
+            .unwrap_err();
+
+        // Assert
+        assert!(matches!(error, PersistError::NotFound { name } if name == "config"));
+    }
+
+    #[test]
     fn get_config_by_active() -> anyhow::Result<()> {
         // Arrange
         let expected = Config {
@@ -489,7 +514,7 @@ mod tests {
         };
         let connection = setup_db()?;
         insert_config(&connection, &expected)?;
-        let store = Sqlite::new(connection)?;
+        let store = Sqlite::new(connection);
 
         // Act
         let config = store.get_configuration(None).unwrap();
@@ -501,6 +526,61 @@ mod tests {
     }
 
     #[test]
+    fn on_no_active_config_not_found_thrown() {
+        // Arrange
+        let expected = Config {
+            status: ConfigStatus::Disabled,
+            ..fake_config()
+        };
+        let connection = setup_db().unwrap();
+        insert_config(&connection, &expected).unwrap();
+        let store = Sqlite::new(connection);
+
+        // Act
+        let error = store.get_configuration(None).unwrap_err();
+
+        // Assert
+        assert!(matches!(error, PersistError::NotFound { name } if name == "config"));
+    }
+
+    #[test]
+    fn corrupted_path_returns_corrupted_error_on_get() {
+        // Arrange
+        let connection = setup_db().unwrap();
+        let key = Faker.fake::<String>();
+        connection
+            .execute(
+                "INSERT INTO config (key, path, status) VALUES (?1, ?2, ?3)",
+                (&key, "invalid_path", String::from(ConfigStatus::Active)),
+            )
+            .unwrap();
+
+        let store = Sqlite::new(connection);
+
+        // Act
+        let error = store.get_configuration(Some(key)).unwrap_err();
+
+        // Assert
+        assert!(matches!(error, PersistError::Corrupted { name, .. } if name == "config"));
+    }
+
+    #[test]
+    fn corrupted_config_status_returns_corrupted_error_on_get() {
+        // Arrange
+        let connection = setup_db().unwrap();
+        let key = Faker.fake::<String>();
+
+        insert_raw_config(&connection, &key, &valid_path_str(), "invalid_status");
+
+        let store = Sqlite::new(connection);
+
+        // Act
+        let error = store.get_configuration(Some(key)).unwrap_err();
+        // Assert
+        assert!(matches!(error, PersistError::Corrupted { name, .. } if name == "config"));
+    }
+
+    #[test]
     fn set_active_config_success() -> anyhow::Result<()> {
         let mut original = Config {
             status: ConfigStatus::Disabled,
@@ -509,7 +589,7 @@ mod tests {
         let connection = setup_db()?;
         insert_config(&connection, &original)?;
 
-        let mut store = Sqlite::new(connection)?;
+        let mut store = Sqlite::new(connection);
         let actual = store.set_active_config(&original.key.clone())?;
 
         original.status = ConfigStatus::Active;
@@ -519,24 +599,26 @@ mod tests {
     }
 
     #[test]
-    fn set_active_checks_row_exists_before_clearing_status() -> anyhow::Result<()> {
-        let connection = setup_db()?;
-        let mut store = Sqlite::new(connection)?;
+    fn set_active_checks_row_exists_before_clearing_status() {
+        let connection = setup_db().unwrap();
+        let mut store = Sqlite::new(connection);
 
         let active_config = Config {
             status: ConfigStatus::Active,
             ..fake_config()
         };
 
-        insert_config(&store.connection, &active_config)?;
+        insert_config(&store.connection, &active_config).unwrap();
 
-        let result = store.set_active_config(&ConfigKey::User(Faker.fake()));
-        assert!(result.is_err());
+        let result = store
+            .set_active_config(&ConfigKey::User(Faker.fake()))
+            .unwrap_err();
+        assert!(matches!(result, PersistError::NotFound { name } if name == "config"));
 
-        let default = store.get_configuration(Some(active_config.key.clone().into()))?;
+        let default = store
+            .get_configuration(Some(active_config.key.clone().into()))
+            .unwrap();
         assert_eq!(active_config.key, default.key);
-
-        Ok(())
     }
 
     #[test]
@@ -559,7 +641,7 @@ mod tests {
 
         insert_config(&connection, &original)?;
 
-        let mut store = Sqlite::new(connection)?;
+        let mut store = Sqlite::new(connection);
         // Act
         store.set_active_config(&original.key)?;
 
@@ -581,9 +663,20 @@ mod tests {
         Ok(())
     }
 
-    fn fake_config() -> Config {
+    fn valid_path() -> AbsolutePath {
         let path = Path::new(".").to_owned();
-        let absolute_path = std::fs::canonicalize(path).expect("Valid conversion to absolute path");
+        std::fs::canonicalize(path)
+            .expect("Valid conversion to absolute path")
+            .try_into()
+            .unwrap()
+    }
+
+    fn valid_path_str() -> String {
+        valid_path().to_string()
+    }
+
+    fn fake_config() -> Config {
+        let absolute_path = valid_path();
 
         Config {
             key: ConfigKey::User(Faker.fake()),
@@ -592,19 +685,39 @@ mod tests {
         }
     }
 
+    fn insert_branch(connection: &Connection, branch: &Branch) {
+        connection.execute(
+            "INSERT INTO branch (name, ticket, data, created, link, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (
+                &branch.name,
+                &branch.ticket,
+                &branch.data,
+                &branch.created.to_rfc3339(),
+                &branch.link,
+                &branch.scope
+            ),
+        ).unwrap();
+    }
+
     fn insert_config(connection: &Connection, config: &Config) -> anyhow::Result<()> {
         let key: String = config.key.clone().into();
-
-        connection.execute(
-            "INSERT INTO config (key, path, status) VALUES (?1, ?2, ?3)",
-            (
-                &key,
-                (&config.path).try_convert()?,
-                String::from(config.status.clone()),
-            ),
-        )?;
+        insert_raw_config(
+            connection,
+            &key,
+            &config.path.to_string(),
+            &String::from(config.status.clone()),
+        );
 
         Ok(())
+    }
+
+    fn insert_raw_config(connection: &Connection, key: &str, path: &str, status: &str) {
+        connection
+            .execute(
+                "INSERT INTO config (key, path, status) VALUES (?1, ?2, ?3)",
+                (&key, path, status),
+            )
+            .unwrap();
     }
 
     fn fake_branch(name: Option<String>, repo: Option<String>) -> anyhow::Result<Branch> {
@@ -617,7 +730,7 @@ mod tests {
             Faker.fake(),
             Faker.fake(),
             Faker.fake(),
-        )?)
+        ))
     }
 
     fn select_branch_row(conn: &Connection) -> anyhow::Result<Branch> {

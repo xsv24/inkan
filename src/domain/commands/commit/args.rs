@@ -176,7 +176,7 @@ mod tests {
     fn commit_template_ticket_num_is_replaced_with_branch_name() -> anyhow::Result<()> {
         let commands = TestCommand::fake();
 
-        let branch = Branch::new(&commands.branch_name, &commands.repo, None, None, None)?;
+        let branch = Branch::new(&commands.branch_name, &commands.repo, None, None, None);
 
         let args = Commit {
             ticket: None,

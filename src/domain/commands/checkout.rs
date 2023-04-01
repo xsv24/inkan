@@ -1,5 +1,6 @@
 use crate::domain::{
     adapters::{CheckoutStatus, Git, Store},
+    errors::Errors,
     models::Branch,
 };
 
@@ -15,7 +16,7 @@ pub struct Checkout {
     pub link: Option<String>,
 }
 
-pub fn handler<G: Git, S: Store>(git: &G, store: &S, args: Checkout) -> anyhow::Result<Branch> {
+pub fn handler<G: Git, S: Store>(git: &G, store: &S, args: Checkout) -> Result<Branch, Errors> {
     // Attempt to create branch
     let create = git.checkout(&args.name, CheckoutStatus::New);
 
@@ -23,14 +24,18 @@ pub fn handler<G: Git, S: Store>(git: &G, store: &S, args: Checkout) -> anyhow::
     if let Err(err) = create {
         log::error!("failed to create new branch: {}", err);
 
-        git.checkout(&args.name, CheckoutStatus::Existing)?;
+        git.checkout(&args.name, CheckoutStatus::Existing)
+            .map_err(Errors::Git)?;
     }
 
     // We want to store the branch name against and ticket number
     // So whenever we commit we get the ticket number from the branch
-    let repo_name = git.repository_name()?;
-    let branch = Branch::new(&args.name, &repo_name, args.ticket, args.link, args.scope)?;
-    store.persist_branch(&branch)?;
+    let repo_name = git.repository_name().map_err(Errors::Git)?;
+
+    let branch = Branch::new(&args.name, &repo_name, args.ticket, args.link, args.scope);
+    store
+        .persist_branch(&branch)
+        .map_err(Errors::PersistError)?;
 
     Ok(branch)
 }

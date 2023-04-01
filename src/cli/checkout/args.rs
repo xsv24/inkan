@@ -2,7 +2,7 @@ use clap::Args;
 use std::result::Result::Ok;
 
 use crate::{
-    domain::{adapters::prompt::Prompter, commands::checkout::Checkout},
+    domain::{adapters::prompt::Prompter, commands::checkout::Checkout, errors::UserInputError},
     entry::Interactive,
     utils::or_else_try::OrElseTry,
 };
@@ -31,22 +31,22 @@ impl Arguments {
         &self,
         prompt: P,
         interactive: &Interactive,
-    ) -> anyhow::Result<Checkout> {
+    ) -> Result<Checkout, UserInputError> {
         let domain = match interactive {
             Interactive::Enable => Checkout {
                 name: self.name.clone(),
                 ticket: self
                     .ticket
                     .clone()
-                    .or_else_try(|| prompt.text("Ticket:", None))?,
+                    .or_else_try(|| prompt.text("Ticket", None))?,
                 scope: self
                     .scope
                     .clone()
-                    .or_else_try(|| prompt.text("Scope:", None))?,
+                    .or_else_try(|| prompt.text("Scope", None))?,
                 link: self
                     .link
                     .clone()
-                    .or_else_try(|| prompt.text("Link:", None))?,
+                    .or_else_try(|| prompt.text("Link", None))?,
             },
             Interactive::Disable => Checkout {
                 name: self.name.clone(),
@@ -63,7 +63,6 @@ impl Arguments {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Context;
     use fake::{Fake, Faker};
 
     use crate::domain::adapters::prompt::SelectItem;
@@ -158,20 +157,33 @@ mod tests {
     }
 
     impl Prompter for PromptTest {
-        fn text(&self, _: &str, _: Option<String>) -> anyhow::Result<Option<String>> {
+        fn text(&self, name: &str, _: Option<String>) -> Result<Option<String>, UserInputError> {
             match &self.text_result {
                 Ok(option) => Ok(option.clone()),
-                Err(_) => Err(anyhow::anyhow!("Text prompt failed")),
+                Err(_) => Err(UserInputError::Validation {
+                    name: name.into(),
+                    message: "An error occurred in the mock prompter".into(),
+                }),
             }
         }
 
-        fn select<T>(&self, _: &str, options: Vec<SelectItem<T>>) -> anyhow::Result<SelectItem<T>> {
+        fn select<T>(
+            &self,
+            name: &str,
+            options: Vec<SelectItem<T>>,
+        ) -> Result<SelectItem<T>, UserInputError> {
+            let name: String = name.into();
             match &self.select_index {
-                Ok(index) => Ok(options
-                    .into_iter()
-                    .nth(index.clone())
-                    .context("Failed to get item")?),
-                Err(_) => Err(anyhow::anyhow!("Select prompt failed")),
+                Ok(index) => options.into_iter().nth(index.clone()).ok_or_else(|| {
+                    UserInputError::Validation {
+                        name: name.clone(),
+                        message: "An error occurred in the mock prompter".into(),
+                    }
+                }),
+                Err(_) => Err(UserInputError::Validation {
+                    name: name.clone(),
+                    message: "An error occurred in the mock prompter".into(),
+                }),
             }
         }
     }

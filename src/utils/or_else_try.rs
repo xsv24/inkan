@@ -1,13 +1,13 @@
-pub trait OrElseTry<T> {
-    fn or_else_try<F>(self, or: F) -> anyhow::Result<Option<T>>
+pub trait OrElseTry<T, E> {
+    fn or_else_try<F>(self, or: F) -> Result<Option<T>, E>
     where
-        F: FnOnce() -> anyhow::Result<Option<T>>;
+        F: FnOnce() -> Result<Option<T>, E>;
 }
 
-impl<T> OrElseTry<T> for Option<T> {
-    fn or_else_try<F>(self, or: F) -> anyhow::Result<Option<T>>
+impl<T, E> OrElseTry<T, E> for Option<T> {
+    fn or_else_try<F>(self, or: F) -> Result<Option<T>, E>
     where
-        F: FnOnce() -> anyhow::Result<Option<T>>,
+        F: FnOnce() -> Result<Option<T>, E>,
     {
         let result = match self {
             Some(value) => Some(value),

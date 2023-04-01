@@ -1,7 +1,10 @@
 use clap::Args;
 
 use crate::{
-    domain::{adapters::prompt::Prompter, commands::context::Context, models::Branch},
+    domain::{
+        adapters::prompt::Prompter, commands::context::Context, errors::UserInputError,
+        models::Branch,
+    },
     entry::Interactive,
     utils::or_else_try::OrElseTry,
 };
@@ -26,7 +29,7 @@ impl Arguments {
         &self,
         branch: Option<Branch>,
         prompt: P,
-    ) -> anyhow::Result<Context> {
+    ) -> Result<Context, UserInputError> {
         let ticket = self
             .ticket
             .clone()
@@ -54,7 +57,7 @@ impl Arguments {
         prompt: P,
         interactive: &Interactive,
         branch: Option<Branch>,
-    ) -> anyhow::Result<Context> {
+    ) -> Result<Context, UserInputError> {
         let domain = match interactive {
             Interactive::Enable => self.try_prompt_with_defaults(branch, prompt)?,
             Interactive::Disable => Context {
@@ -74,7 +77,9 @@ mod tests {
     use anyhow::Context as _;
     use fake::{Fake, Faker};
 
-    use crate::domain::{adapters::prompt::SelectItem, commands::context::Context};
+    use crate::domain::{
+        adapters::prompt::SelectItem, commands::context::Context, errors::UserInputError,
+    };
 
     #[test]
     fn try_into_domain_with_no_interactive_prompts() -> anyhow::Result<()> {
@@ -166,20 +171,34 @@ mod tests {
     }
 
     impl Prompter for PromptTest {
-        fn text(&self, _: &str, _: Option<String>) -> anyhow::Result<Option<String>> {
+        fn text(&self, name: &str, _: Option<String>) -> Result<Option<String>, UserInputError> {
             match &self.text_result {
                 Ok(option) => Ok(option.clone()),
-                Err(_) => Err(anyhow::anyhow!("Text prompt failed")),
+                Err(_) => Err(UserInputError::Validation {
+                    name: name.into(),
+                    message: "An error occurred within the mock prompter".into(),
+                }),
             }
         }
 
-        fn select<T>(&self, _: &str, options: Vec<SelectItem<T>>) -> anyhow::Result<SelectItem<T>> {
+        fn select<T>(
+            &self,
+            name: &str,
+            options: Vec<SelectItem<T>>,
+        ) -> Result<SelectItem<T>, UserInputError> {
             match &self.select_index {
-                Ok(index) => Ok(options
+                Ok(index) => options
                     .into_iter()
                     .nth(index.clone())
-                    .context("Failed to get item")?),
-                Err(_) => Err(anyhow::anyhow!("Select prompt failed")),
+                    .context("Failed to get item")
+                    .map_err(|_| UserInputError::Validation {
+                        name: name.into(),
+                        message: "An error occurred within the mock prompter".into(),
+                    }),
+                Err(_) => Err(UserInputError::Validation {
+                    name: name.into(),
+                    message: "An error occurred within the mock prompter".into(),
+                }),
             }
         }
     }

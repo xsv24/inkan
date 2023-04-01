@@ -73,13 +73,13 @@ fn context_with_optionals_none_does_not_overwrite_db() -> anyhow::Result<()> {
 
     context.store.persist_branch(&branch)?;
 
-    // Act
     let command = Context {
         ticket: None,
         scope: None,
         link: None,
     };
 
+    // Act
     handler(&context.git, &context.store, command.clone())?;
 
     // Assert

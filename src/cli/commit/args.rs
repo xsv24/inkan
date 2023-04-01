@@ -6,6 +6,7 @@ use crate::{
     domain::{
         adapters::prompt::{Prompter, SelectItem},
         commands::commit::Commit,
+        errors::UserInputError,
     },
     entry::Interactive,
     template_config::{Template, TemplateConfig},
@@ -35,7 +36,7 @@ impl Arguments {
         config: &TemplateConfig,
         prompter: P,
         interactive: &Interactive,
-    ) -> anyhow::Result<Commit> {
+    ) -> Result<Commit, UserInputError> {
         let template = match &self.template {
             Some(template) => template.into(),
             None => Self::prompt_template_select(
@@ -58,12 +59,11 @@ impl Arguments {
         templates: HashMap<String, Template>,
         prompter: P,
         interactive: Interactive,
-    ) -> anyhow::Result<String> {
+    ) -> Result<String, UserInputError> {
         if interactive == Interactive::Disable {
-            anyhow::bail!(clap::Error::raw(
-                clap::ErrorKind::MissingRequiredArgument,
-                "'template' is required"
-            ))
+            return Err(UserInputError::Required {
+                name: "template".into(),
+            });
         }
 
         let items = templates
@@ -75,7 +75,7 @@ impl Arguments {
             })
             .collect::<Vec<_>>();
 
-        let selected = prompter.select("Template:", items)?;
+        let selected = prompter.select("Template", items)?;
 
         Ok(selected.name)
     }
@@ -87,7 +87,10 @@ mod tests {
     use anyhow::Context;
     use fake::{Fake, Faker};
 
-    use crate::{domain::adapters::prompt::SelectItem, template_config::CommitConfig};
+    use crate::{
+        domain::{adapters::prompt::SelectItem, errors::UserInputError},
+        template_config::CommitConfig,
+    };
 
     #[test]
     fn try_into_domain_with_no_interactive_prompts() -> anyhow::Result<()> {
@@ -225,7 +228,7 @@ mod tests {
             .try_into_domain(&config, prompt, &Interactive::Disable)
             .unwrap_err();
 
-        assert_eq!(error.to_string(), "error: 'template' is required");
+        assert_eq!(error.to_string(), "Missing required \"template\" input");
     }
 
     pub struct PromptTest {
@@ -234,20 +237,34 @@ mod tests {
     }
 
     impl Prompter for PromptTest {
-        fn text(&self, _: &str, _: Option<String>) -> anyhow::Result<Option<String>> {
+        fn text(&self, name: &str, _: Option<String>) -> Result<Option<String>, UserInputError> {
             match &self.text_result {
                 Ok(option) => Ok(option.clone()),
-                Err(_) => Err(anyhow::anyhow!("Text prompt failed")),
+                Err(_) => Err(UserInputError::Validation {
+                    name: name.into(),
+                    message: "error".into(),
+                }),
             }
         }
 
-        fn select<T>(&self, _: &str, options: Vec<SelectItem<T>>) -> anyhow::Result<SelectItem<T>> {
+        fn select<T>(
+            &self,
+            name: &str,
+            options: Vec<SelectItem<T>>,
+        ) -> Result<SelectItem<T>, UserInputError> {
             match &self.select_item_name {
-                Ok(name) => Ok(options
+                Ok(name) => options
                     .into_iter()
                     .find(|i| i.name == name.clone())
-                    .context("Failed to get item")?),
-                Err(_) => Err(anyhow::anyhow!("Select prompt failed")),
+                    .context("Failed to get item")
+                    .map_err(|_| UserInputError::Validation {
+                        name: name.into(),
+                        message: "error".into(),
+                    }),
+                Err(_) => Err(UserInputError::Validation {
+                    name: name.into(),
+                    message: "error".into(),
+                }),
             }
         }
     }

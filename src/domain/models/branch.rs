@@ -17,15 +17,15 @@ impl Branch {
         ticket: Option<String>,
         link: Option<String>,
         scope: Option<String>,
-    ) -> anyhow::Result<Branch> {
-        Ok(Branch {
+    ) -> Branch {
+        Branch {
             name: format!("{}-{}", repo.trim(), name.trim()),
             created: Utc::now(),
             ticket: ticket.unwrap_or_else(|| name.into()),
             link,
             scope,
             data: None,
-        })
+        }
     }
 }
 
@@ -53,7 +53,7 @@ mod tests {
             Some(ticket.clone()),
             Some(link.clone()),
             Some(scope.clone()),
-        )?;
+        );
 
         // Assert
         assert_eq!(branch.name, format!("{}-{}", &repo, &name));
@@ -74,7 +74,7 @@ mod tests {
         let repo = Faker.fake::<String>();
 
         // Act
-        let branch = Branch::new(&name, &repo, None, None, None)?;
+        let branch = Branch::new(&name, &repo, None, None, None);
 
         // Assert
         assert_eq!(branch.name, format!("{}-{}", &repo, &name));
@@ -94,7 +94,7 @@ mod tests {
         let repo = Faker.fake::<String>();
 
         // Act
-        let branch = Branch::new(&name, &repo, Some(ticket.clone()), None, None)?;
+        let branch = Branch::new(&name, &repo, Some(ticket.clone()), None, None);
 
         // Assert
         assert_eq!(branch.name, format!("{}-{}", &repo.trim(), &name.trim()));

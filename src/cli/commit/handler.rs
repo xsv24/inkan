@@ -3,6 +3,7 @@ use crate::{
     domain::{
         adapters::{prompt::Prompter, Git, Store},
         commands::commit,
+        errors::Errors,
     },
     template_config::TemplateConfig,
 };
@@ -13,9 +14,12 @@ pub fn handler<G: Git, S: Store, P: Prompter>(
     context: &AppContext<G, S>,
     args: Arguments,
     prompter: P,
-) -> anyhow::Result<()> {
+) -> Result<(), Errors> {
     let templates = TemplateConfig::new(&context.config.path)?;
-    let commit = args.try_into_domain(&templates, prompter, &context.interactive)?;
+    let commit = args
+        .try_into_domain(&templates, prompter, &context.interactive)
+        .map_err(Errors::UserInput)?;
+
     commit::handler(&context.git, &context.store, commit)?;
 
     Ok(())

@@ -1,3 +1,5 @@
+use crate::domain::errors::UserInputError;
+
 pub struct SelectItem<T> {
     pub name: String,
     pub value: T,
@@ -5,11 +7,15 @@ pub struct SelectItem<T> {
 }
 
 pub trait Prompter {
-    fn text(&self, question: &str, default: Option<String>) -> anyhow::Result<Option<String>>;
+    fn text(
+        &self,
+        question: &str,
+        default: Option<String>,
+    ) -> Result<Option<String>, UserInputError>;
 
     fn select<T>(
         &self,
         question: &str,
         options: Vec<SelectItem<T>>,
-    ) -> anyhow::Result<SelectItem<T>>;
+    ) -> Result<SelectItem<T>, UserInputError>;
 }

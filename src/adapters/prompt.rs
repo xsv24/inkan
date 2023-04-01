@@ -1,13 +1,16 @@
 use std::fmt::Display;
 
 use crate::{
-    domain::adapters::prompt::{Prompter, SelectItem},
+    domain::{
+        adapters::prompt::{Prompter, SelectItem},
+        errors::UserInputError,
+    },
     utils::string::OptionStr,
 };
 use colored::Colorize;
 use inquire::{
     ui::{Attributes, Color, RenderConfig, StyleSheet, Styled},
-    Select, Text,
+    InquireError, Select, Text,
 };
 
 impl<T> Display for SelectItem<T> {
@@ -45,12 +48,12 @@ impl Prompt {
 impl Prompter for Prompt {
     fn select<T>(
         &self,
-        question: &str,
+        name: &str,
         options: Vec<SelectItem<T>>,
-    ) -> anyhow::Result<SelectItem<T>> {
+    ) -> Result<SelectItem<T>, UserInputError> {
         let len = options.len();
         let select: Select<SelectItem<T>> = Select {
-            message: question,
+            message: &format!("{name}:"),
             options,
             help_message: Select::<SelectItem<T>>::DEFAULT_HELP_MESSAGE,
             page_size: len,
@@ -61,16 +64,34 @@ impl Prompter for Prompt {
             render_config: Self::get_render_config(),
         };
 
-        Ok(select.prompt()?)
+        let selected = select.prompt().map_err(|e| into_domain_error(name, e))?;
+
+        Ok(selected)
     }
 
-    fn text(&self, question: &str, default: Option<String>) -> anyhow::Result<Option<String>> {
-        let result = Text::new(question)
+    fn text(&self, name: &str, default: Option<String>) -> Result<Option<String>, UserInputError> {
+        let result = Text::new(&format!("{name}:"))
             .with_default(&default.unwrap_or("".into()))
             .with_render_config(Self::get_render_config())
-            .prompt_skippable()?;
+            .prompt_skippable()
+            .map_err(|e| into_domain_error(name, e))?;
 
         Ok(result.none_if_empty())
+    }
+}
+
+fn into_domain_error(name: &str, error: InquireError) -> UserInputError {
+    match error {
+        inquire::InquireError::OperationCanceled | inquire::InquireError::OperationInterrupted => {
+            UserInputError::Cancelled
+        }
+        inquire::InquireError::NotTTY
+        | inquire::InquireError::IO(_)
+        | inquire::InquireError::Custom(_)
+        | inquire::InquireError::InvalidConfiguration(_) => UserInputError::Validation {
+            name: name.to_lowercase(),
+            message: "Failed completing prompt interaction, please try again or disable interactive mode\n--prompt disable".into()
+        },
     }
 }
 

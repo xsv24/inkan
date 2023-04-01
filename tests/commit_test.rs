@@ -174,5 +174,5 @@ fn fake_branch(
         ticket,
         Faker.fake(),
         Faker.fake(),
-    )?)
+    ))
 }

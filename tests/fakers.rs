@@ -1,9 +1,5 @@
-use anyhow::anyhow;
 use chrono::Utc;
-use std::{
-    env::temp_dir,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use fake::{Fake, Faker};
 use git_kit::{
@@ -11,20 +7,30 @@ use git_kit::{
     app_context::AppContext,
     domain::{
         adapters::{CheckoutStatus, CommitMsgStatus, Git},
-        models::{Branch, Config, ConfigStatus},
+        errors::GitError,
+        models::{path::AbsolutePath, Branch, Config, ConfigStatus},
     },
     entry::Interactive,
     migrations::{db_migrations, MigrationContext},
 };
 use rusqlite::Connection;
-use uuid::Uuid;
 
 pub fn fake_config() -> Config {
     Config {
-        key: Faker.fake::<String>().into(),
-        path: Faker.fake(),
+        key: Faker.fake::<String>().as_str().into(),
+        path: valid_template_file_path(),
         status: ConfigStatus::Active,
     }
+}
+
+pub fn valid_template_file_path() -> AbsolutePath {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let default_config = root.join("templates/default.yml");
+
+    let path = std::env::temp_dir().join("default.yml");
+    std::fs::copy(&default_config, &path).unwrap();
+
+    path.try_into().unwrap()
 }
 
 pub fn fake_context<'a, C: Git>(git: C, config: Config) -> anyhow::Result<AppContext<C, Sqlite>> {
@@ -39,7 +45,7 @@ pub fn fake_context<'a, C: Git>(git: C, config: Config) -> anyhow::Result<AppCon
     )?;
 
     let context = AppContext {
-        store: Sqlite::new(connection)?,
+        store: Sqlite::new(connection),
         config,
         git,
         interactive: Interactive::Enable,
@@ -64,9 +70,9 @@ pub fn fake_branch() -> Branch {
 pub struct GitCommandMock {
     pub repo: Result<String, String>,
     pub branch_name: Result<String, String>,
-    pub checkout_res: fn(&str, CheckoutStatus) -> anyhow::Result<()>,
-    pub commit_res: fn(&Path, CommitMsgStatus) -> anyhow::Result<()>,
-    pub template_file_path: fn() -> anyhow::Result<PathBuf>,
+    pub checkout_res: fn(&str, CheckoutStatus) -> Result<(), GitError>,
+    pub commit_res: fn(&Path, CommitMsgStatus) -> Result<(), GitError>,
+    pub template_file_path: fn() -> Result<AbsolutePath, GitError>,
 }
 
 impl GitCommandMock {
@@ -76,38 +82,35 @@ impl GitCommandMock {
             branch_name: Ok(Faker.fake()),
             checkout_res: |_, _| Ok(()),
             commit_res: |_, _| Ok(()),
-            template_file_path: || {
-                let temp_file = temp_dir().join(Uuid::new_v4().to_string());
-                Ok(temp_file)
-            },
+            template_file_path: || Ok(valid_template_file_path()),
         }
     }
 }
 
 impl Git for GitCommandMock {
-    fn repository_name(&self) -> anyhow::Result<String> {
+    fn repository_name(&self) -> Result<String, GitError> {
         self.repo
             .as_ref()
             .map(|s| s.to_owned())
-            .map_err(|e| anyhow!(e.to_owned()))
+            .map_err(|e| GitError::Validation { message: e.into() })
     }
 
-    fn branch_name(&self) -> anyhow::Result<String> {
+    fn branch_name(&self) -> Result<String, GitError> {
         self.branch_name
             .as_ref()
             .map(|s| s.to_owned())
-            .map_err(|e| anyhow!(e.to_owned()))
+            .map_err(|e| GitError::Validation { message: e.into() })
     }
 
-    fn checkout(&self, name: &str, status: CheckoutStatus) -> anyhow::Result<()> {
+    fn checkout(&self, name: &str, status: CheckoutStatus) -> Result<(), GitError> {
         (self.checkout_res)(name, status)
     }
 
-    fn root_directory(&self) -> anyhow::Result<PathBuf> {
+    fn root_directory(&self) -> Result<AbsolutePath, GitError> {
         panic!("Did not expect Git 'root_directory' to be called.");
     }
 
-    fn template_file_path(&self) -> anyhow::Result<PathBuf> {
+    fn template_file_path(&self) -> Result<AbsolutePath, GitError> {
         (self.template_file_path)()
     }
 
@@ -115,7 +118,7 @@ impl Git for GitCommandMock {
         &self,
         template: &Path,
         complete: CommitMsgStatus,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), GitError> {
         (self.commit_res)(template, complete)
     }
 }

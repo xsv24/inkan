@@ -2,7 +2,10 @@ use clap::Subcommand;
 
 use crate::{
     app_context::AppContext,
-    domain::adapters::{prompt::Prompter, Git, Store},
+    domain::{
+        adapters::{prompt::Prompter, Git, Store},
+        errors::Errors,
+    },
 };
 
 use super::{checkout, commit, config, context, templates};
@@ -27,7 +30,7 @@ impl Commands {
         self,
         context: &mut AppContext<G, S>,
         prompt: P,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Errors> {
         match self {
             Commands::Checkout(args) => checkout::handler(context, args, prompt),
             Commands::Context(args) => context::handler(context, args, prompt),
