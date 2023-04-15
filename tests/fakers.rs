@@ -15,12 +15,8 @@ use git_kit::{
 };
 use rusqlite::Connection;
 
-pub fn fake_config() -> Config {
-    Config {
-        key: Faker.fake::<String>().as_str().into(),
-        path: valid_template_file_path(),
-        status: ConfigStatus::Active,
-    }
+lazy_static::lazy_static! {
+    static ref VALID_FILE_PATH: AbsolutePath = valid_template_file_path();
 }
 
 pub fn valid_template_file_path() -> AbsolutePath {
@@ -33,6 +29,14 @@ pub fn valid_template_file_path() -> AbsolutePath {
     path.try_into().unwrap()
 }
 
+pub fn fake_config() -> Config {
+    Config {
+        key: Faker.fake::<String>().as_str().into(),
+        path: VALID_FILE_PATH.clone(),
+        status: ConfigStatus::Active,
+    }
+}
+
 pub fn fake_context<'a, C: Git>(git: C, config: Config) -> anyhow::Result<AppContext<C, Sqlite>> {
     let mut connection = Connection::open_in_memory()?;
 
@@ -40,7 +44,7 @@ pub fn fake_context<'a, C: Git>(git: C, config: Config) -> anyhow::Result<AppCon
         &mut connection,
         MigrationContext {
             default_configs: None,
-            version: None,
+            version: 4,
         },
     )?;
 
@@ -82,7 +86,7 @@ impl GitCommandMock {
             branch_name: Ok(Faker.fake()),
             checkout_res: |_, _| Ok(()),
             commit_res: |_, _| Ok(()),
-            template_file_path: || Ok(valid_template_file_path()),
+            template_file_path: || Ok(VALID_FILE_PATH.clone()),
         }
     }
 }

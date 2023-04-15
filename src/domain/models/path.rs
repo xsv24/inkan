@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,7 +126,7 @@ impl TryInto<AbsolutePath> for String {
 
     fn try_into(self) -> Result<AbsolutePath, Self::Error> {
         let path = Path::new(&self);
-        let absolute_path = fs::canonicalize(path).map_err(|e| {
+        let absolute_path = dunce::canonicalize(path).map_err(|e| {
             log::error!("Failed to convert string into valid absolute path: {}", e);
             PathError::Conversion
         })?;
@@ -170,7 +167,7 @@ mod test {
                 path: dir_path,
                 path_type: PathType::Directory
             }
-        )
+        );
     }
 
     #[test]
@@ -184,7 +181,7 @@ mod test {
                 path: file_path,
                 path_type: PathType::File
             }
-        )
+        );
     }
 
     #[test]
@@ -200,7 +197,7 @@ mod test {
                 path: dir_path_buf,
                 path_type: PathType::Directory
             }
-        )
+        );
     }
 
     #[test]
@@ -216,7 +213,7 @@ mod test {
                 expected: PathType::Directory,
                 actual: PathType::File
             }
-        )
+        );
     }
 
     #[test]
@@ -232,7 +229,7 @@ mod test {
                 path: file_path_buf,
                 path_type: PathType::File
             }
-        )
+        );
     }
 
     #[test]
@@ -248,7 +245,7 @@ mod test {
                 expected: PathType::File,
                 actual: PathType::Directory
             }
-        )
+        );
     }
 
     fn valid_dir_path() -> PathBuf {

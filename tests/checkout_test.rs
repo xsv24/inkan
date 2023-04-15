@@ -112,7 +112,8 @@ fn checkout_on_fail_to_checkout_branch_nothing_is_persisted() {
                 message: "failed to create or checkout existing branch!".into(),
             })
         },
-        ..GitCommandMock::fake()
+        commit_res: |_, _| panic!("commit method should not be called"),
+        template_file_path: || panic!("template should not be needed"),
     };
 
     let context = fake_context(git_commands.clone(), fake_config()).unwrap();

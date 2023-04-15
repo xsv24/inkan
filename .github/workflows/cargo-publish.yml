@@ -1,0 +1,70 @@
+name: 🦀 Cargo Publish
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: false
+        type: string
+
+      dry-run:
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  dry-run:
+    if: inputs.dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Cargo toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Cargo publish dry-run
+        uses: actions-rs/cargo@v1
+        with:
+          command: publish
+          args: --dry-run
+
+  publish:
+    if: inputs.dry-run != true
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Cargo toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Cargo release build
+        uses: actions-rs/cargo@v1
+        with:
+          # Allows us to use the git tag version as the package version
+          command: install
+          args: cargo-release
+
+      - name: Update Cargo.toml version
+        run: |
+          cargo release version ${{ inputs.version }} --no-confirm --execute
+
+      # Publish and allow dirty since the Cargo.toml version is changed.
+      - name: Publish package
+        run: cargo publish --token "$CARGO_TOKEN" --allow-dirty

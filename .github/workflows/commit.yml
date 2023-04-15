@@ -1,6 +1,10 @@
-on: [push]
+name: 🧪 Commit
 
-name: Commit CI
+on:
+  pull_request:
+  push:
+    branches:
+      - master
 
 jobs:
   check:
@@ -63,4 +67,65 @@ jobs:
         with:
           command: test
           args: -- --show-output
-    needs: [check, fmt, clippy]
+
+  os-test:
+    needs: [check, fmt, clippy, test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        # List of OS versions https://github.com/actions/runner-images
+        include:
+          - build: linux-x86
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+
+          - build: linux-i686
+            os: ubuntu-22.04
+            target: i686-unknown-linux-musl
+
+          - build: linux-aarch64
+            os: ubuntu-22.04
+            target: aarch64-unknown-linux-musl
+
+          - build: linux-arm
+            os: ubuntu-22.04
+            target: arm-unknown-linux-gnueabihf
+
+          - build: macos-x86
+            os: macos-12
+            target: x86_64-apple-darwin
+
+          - build: win-msvc
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+
+          - build: win32-msvc
+            os: windows-2022
+            target: i686-pc-windows-msvc
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install ${{ matrix.target }} toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+
+      - name: Cross Tests
+        uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
+          BUILD_DISABLED: "true" # Disable the "build.rs" file from running
+        with:
+          use-cross: true
+          command: test
+          args: --target=${{ matrix.target }}
+
+  cargo-check:
+    uses: xsv24/git-kit/.github/workflows/cargo-publish.yml@binary-relase
+    with:
+      dry-run: true

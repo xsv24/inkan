@@ -1,6 +1,3 @@
-[![rust](https://img.shields.io/badge/rust-161923?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![git-logo](https://img.shields.io/badge/git-F05032?style=for-the-badge&logo=git&logoColor=white)](https://git-scm.com/)
-
 [![crates.io](https://img.shields.io/crates/v/git-kit?label=%F0%9F%93%A6%20git-kit&style=flat-square)](https://crates.io/crates/git-kit)
 [![Main branch tests](https://img.shields.io/github/actions/workflow/status/xsv24/git-kit/commit.yml?branch=main&label=%F0%9F%A7%AA%20tests&style=flat-square)](https://img.shields.io/github/actions/workflow/status/xsv24/git-kit/actions)
 [![license](https://img.shields.io/github/license/xsv24/git-kit?color=blue&style=flat-square&logo=)](./LICENSE)
@@ -74,19 +71,58 @@ git-kit config set conventional
 - `scope` Short description of a section of the codebase the commit relates to.
 
 ## ⏳ Install Binary
+<details>
+  <summary>🦀 Cargo</summary>
+ 
+  Install the latest version via [Cargo](https://www.rust-lang.org/tools/install). 
 
-### Rust
-- Install [Rust](https://www.rust-lang.org/tools/install)
+  ```bash
+  cargo install git-kit
+  ```
+</details>
 
-```bash
-cargo install git-kit
-```
+<details>
+  <summary>🍏 MacOS</summary>
+  
+  > Homebrew coming soon 🤞
+
+  Install the latest version:
+
+  ```bash
+  curl -sS https://raw.githubusercontent.com/xsv24/git-kit/main/scripts/install.sh | sh
+  ```
+
+  Depending on your setup you may need to run the script with `sudo`.
+
+  ```bash
+  curl -sS https://raw.githubusercontent.com/xsv24/git-kit/main/scripts/install.sh | sudo sh -s - -b /usr/local/bin
+  ```
+</details>
+
+<details>
+  <summary>🐧 Linux</summary>
+  
+  > Package managers coming soon 🤞
+
+  Install the latest version:
+
+  ```bash
+  curl -sS https://raw.githubusercontent.com/xsv24/git-kit/main/scripts/install.sh | sh
+  ```
+</details>
+
+<details>
+  <summary>🪟 Windows</summary>
+
+  Coming soon 🤞
+</details>
+
+---
+## 🏎️💨 Getting Started
 
 ```bash
 git-kit --help
 ```
-
-## 🏎️💨 Getting Started
 
 ```bash
 # Checkout a new branch & add optional context params.
