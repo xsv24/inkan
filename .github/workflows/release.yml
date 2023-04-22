@@ -31,7 +31,7 @@ jobs:
 
   cargo:
     needs: ["github-release"]
-    uses: xsv24/inkan/.github/workflows/cargo-publish.yml@binary-relase
+    uses: xsv24/inkan/.github/workflows/cargo-publish.yml@main
     with:
       version: ${{ needs.github-release.version }}
       dry-run: false
