@@ -23,8 +23,8 @@ pub enum Interactive {
 #[clap(about = "git cli containing templates & utilities.", long_about = None)]
 #[clap(version)]
 pub struct Cli {
-    // TODO Name or file path to config file to be used as a once off. 
-    /// File path to config file to be used as a once off. 
+    // TODO Name or file path to config file to be used as a once off.
+    /// File path to config file to be used as a once off.
     #[clap(short, long)]
     config: Option<String>,
 
