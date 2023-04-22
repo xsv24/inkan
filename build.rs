@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    if let Some(dirs) = ProjectDirs::from("dev", "xsv24", "git-kit") {
+    if let Some(dirs) = ProjectDirs::from("dev", "xsv24", "inkan") {
         // https://doc.rust-lang.org/cargo/reference/environment-variables.html
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let config_dir = dirs.config_dir();
@@ -30,7 +30,7 @@ fn main() -> anyhow::Result<()> {
         fs::create_dir_all(config_dir).ok();
 
         copy_or_replace(&project_root.join("templates"), &config_dir.to_path_buf())
-            .context("Failed to copy or update to the latest config file for git-kit")?;
+            .context("Failed to copy or update to the latest config file for inkan")?;
     }
 
     println!("cargo:rerun-if-changed=build.rs");

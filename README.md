@@ -1,8 +1,8 @@
-[![crates.io](https://img.shields.io/crates/v/git-kit?label=%F0%9F%93%A6%20git-kit&style=flat-square)](https://crates.io/crates/git-kit)
-[![Main branch tests](https://img.shields.io/github/actions/workflow/status/xsv24/git-kit/commit.yml?branch=main&label=%F0%9F%A7%AA%20tests&style=flat-square)](https://img.shields.io/github/actions/workflow/status/xsv24/git-kit/actions)
-[![license](https://img.shields.io/github/license/xsv24/git-kit?color=blue&style=flat-square&logo=)](./LICENSE)
+[![crates.io](https://img.shields.io/crates/v/inkan?label=%F0%9F%93%A6%20inkan&style=flat-square)](https://crates.io/crates/inkan)
+[![Main branch tests](https://img.shields.io/github/actions/workflow/status/xsv24/inkan/commit.yml?branch=main&label=%F0%9F%A7%AA%20tests&style=flat-square)](https://img.shields.io/github/actions/workflow/status/xsv24/inkan/actions)
+[![license](https://img.shields.io/github/license/xsv24/inkan?color=blue&style=flat-square&logo=)](./LICENSE)
 
-# 🧰 git-kit
+# 🖋 inkan
 
 Use this CLI to help format your git commit messages consistently with less effort via pre-provided templates! 🤩
 
@@ -17,7 +17,7 @@ You can also create your own Custom Templates by following the [**Custom Templat
 
 ## Simple Commit Template
 ```bash
-git-kit config set default
+inkan config set default
 ```
 
 ```text
@@ -44,7 +44,7 @@ git-kit config set default
 ## Conventional Commit Standard Templates
 
 ```bash
-git-kit config set conventional
+inkan config set conventional
 ```
 
 ```text
@@ -77,7 +77,7 @@ git-kit config set conventional
   Install the latest version via [Cargo](https://www.rust-lang.org/tools/install). 
 
   ```bash
-  cargo install git-kit
+  cargo install inkan
   ```
 </details>
 
@@ -89,13 +89,13 @@ git-kit config set conventional
   Install the latest version:
 
   ```bash
-  curl -sS https://raw.githubusercontent.com/xsv24/git-kit/main/scripts/install.sh | sh
+  curl -sS https://raw.githubusercontent.com/xsv24/inkan/main/scripts/install.sh | sh
   ```
 
   Depending on your setup you may need to run the script with `sudo`.
 
   ```bash
-  curl -sS https://raw.githubusercontent.com/xsv24/git-kit/main/scripts/install.sh | sudo sh -s - -b /usr/local/bin
+  curl -sS https://raw.githubusercontent.com/xsv24/inkan/main/scripts/install.sh | sudo sh -s - -b /usr/local/bin
   ```
 </details>
 
@@ -107,7 +107,7 @@ git-kit config set conventional
   Install the latest version:
 
   ```bash
-  curl -sS https://raw.githubusercontent.com/xsv24/git-kit/main/scripts/install.sh | sh
+  curl -sS https://raw.githubusercontent.com/xsv24/inkan/main/scripts/install.sh | sh
   ```
 </details>
 
@@ -121,25 +121,25 @@ git-kit config set conventional
 ## 🏎️💨 Getting Started
 
 ```bash
-git-kit --help
+inkan --help
 ```
 
 ```bash
 # Checkout a new branch & add optional context params.
-git-kit checkout fix-parser
+inkan checkout fix-parser
   --ticket TICKET-123 \
   --scope parser \
   --link "http://ticket-manager/TICKET-123"
 
 # Select a registered config containing templates to use.
-git-kit config set
+inkan config set
 
 # View currently available templates on chosen config.
-git-kit templates
+inkan templates
 
 # Commit some changes.
-git-kit commit bug -m "Fix up parser"
-git-kit commit chore
+inkan commit bug -m "Fix up parser"
+inkan commit chore
 ```
 ---
 
@@ -155,8 +155,8 @@ When it's time to [commit](#commit-command) your changes any provided context pa
 
 Examples:
 ```bash
-git-kit checkout my-branch --ticket TICKET-123
-git-kit checkout my-branch \
+inkan checkout my-branch --ticket TICKET-123
+inkan checkout my-branch \
   -t TICKET-123 \
   --scope parser \
   --link "http://ticket-manager/TICKET-123"
@@ -165,7 +165,7 @@ git-kit checkout my-branch \
 Most likely your ticket / issue will only have one branch associated to it. In this case you can use the following shorthand 👌
 
 ```bash
-git-kit checkout TICKET-123
+inkan checkout TICKET-123
 ```
 
 ---
@@ -177,13 +177,13 @@ Create or update context params linked to the current checked out branch.
 - `link` Link to to the related issue.
 - `scope` Short description of a section of the codebase the commit relates to.
 
-This is handy if you forgot to add context via the `git-kit` [checkout command](#-checkout-command) or if you want to update the context for future commits.
+This is handy if you forgot to add context via the `inkan` [checkout command](#-checkout-command) or if you want to update the context for future commits.
 
 When it's time to [commit](#commit-command) your changes any provided context params (i.e.`ticket_number`) will be injected into each commit message for you automatically! 😄 It does this by a simple template string injection.
 
 
 ```bash
-git-kit context \
+inkan context \
   --ticket TICKET-123 \
   --scope parser \
   --link "http://ticket-manager/TICKET-123"
@@ -194,7 +194,7 @@ git-kit context \
 Commits any staged changes and builds an editable commit message by injecting any context set parameters from the [checkout](#-checkout-command) or [context](#-context-command) commands into a chosen [template](./templates/default.yml) (i.e. `bug`).
 
 ```bash
-git-kit commit bug
+inkan commit bug
 ```
 > Example template:
 > 
@@ -205,7 +205,7 @@ git-kit commit bug
 Lists currently available commit templates. To add your own, refer to the [Custom Commit Template guide](#-custom-commit-template-example).
 
 ```bash
-git-kit templates
+inkan templates
 
 - bug | Fix that resolves an unintended issue
 - ...
@@ -216,14 +216,14 @@ git-kit templates
 The [default](./templates/default.yml) template will be set as active initially but you can switch between the [provided configurations](./templates) and any added custom templates via the `config set` command.
 
 ```bash
-git-kit config set
+inkan config set
 ```
 > ℹ️ It's not recommend to alter the default template files as they  could be replaced / updated on new releases.
 > 
 > Instead, copy & paste the desired default template, save it somewhere, and add it to the CLI as shown in the [persist configuration guide](#persist-configuration).
 
 ### Custom templates
-Creating your own templates can be done simply by creating your own configuration file [.git-kit.yml](./templates/default.yml).
+Creating your own templates can be done simply by creating your own configuration file [.inkan.yml](./templates/default.yml).
 
 Here's an example of a custom template called `custom`
 
@@ -240,7 +240,7 @@ commit:
 Your custom configuration / templates can be provided to the CLI in one of the following ways:
 
 - Provide a config file path via `--config` option.
-- Create a `.git-kit.yml` config file within your git repositories root directory.
+- Create a `.inkan.yml` config file within your git repositories root directory.
 - Use a config file previously added / linked via `config add` subcommand as highlighted in the [persist configuration guide](#persist-configuration).
 
 ### Persist Configuration
@@ -248,19 +248,19 @@ Your custom configuration / templates can be provided to the CLI in one of the f
 Persisting / linking your own config file can be done by providing the file path to your config file and a reference name.
 
 ```bash
-git-kit config add $CONFIG_NAME $CONFIG_PATH
+inkan config add $CONFIG_NAME $CONFIG_PATH
 ```
 
 You can add multiple config files and switch between them via `set` command.
 
 ```bash
-git-kit config set $CONFIG_NAME
+inkan config set $CONFIG_NAME
 ```
 or 
 
 ```bash
 # Select prompt for available configurations
-git-kit config set 
+inkan config set 
 
 > ? Configuration:  
   ➜ default
@@ -270,7 +270,7 @@ git-kit config set
 To ensure your template has been loaded simply run the command below 👇 to see a list of the currently configured templates.
 
 ```bash
-git-kit templates
+inkan templates
 
 - custom | My custom commit template 🎸
 - ...
@@ -279,7 +279,7 @@ git-kit templates
 Then when your ready to commit your changes use your custom template and your done!  🪂
 
 ```bash
-git-kit commit custom \
+inkan commit custom \
  --ticket TICKET-123 \
  --message "Dang!"
 ```

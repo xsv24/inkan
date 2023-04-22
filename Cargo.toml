@@ -6,8 +6,8 @@ authors = ["Thomas Pearson thomaspearson.dev@gmail.com"]
 license = "MIT"
 description = "git cli containing templates & utilities."
 readme = "README.md"
-homepage = "https://github.com/xsv24/git-kit"
-repository = "https://github.com/xsv24/git-kit"
+homepage = "https://github.com/xsv24/inkan"
+repository = "https://github.com/xsv24/inkan"
 keywords = ["cli", "git", "templates"]
 categories = ["command-line-utilities"]
 
@@ -18,16 +18,16 @@ build = "build.rs"
 [dependencies]
 anyhow = "1.0"
 colored = "2"
-clap = { version = "3.2.17", features = ["derive"] }
+clap = { version = "4.2.4", features = ["derive"] }
 dunce = "1.0.3"
-inquire = "0.5.2"
+inquire = "0.6.1"
 log = "0.4.17"
-env_logger = "0.9.3" 
+env_logger = "0.10.0" 
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 chrono = { version = "0.4.22" }
-directories = { version = "4.0.1" }
-rusqlite = { version = "0.28.0", features = ["bundled"] }
+directories = { version = "5.0.0" }
+rusqlite = { version = "0.29.0", features = ["bundled"] }
 rusqlite_migration = "1.0.1"
 regex = "1.7.0"
 thiserror = "1.0"
@@ -39,7 +39,7 @@ lazy_static = "1.4.0"
 
 [build-dependencies]
 anyhow = "1.0"
-directories = { version = "4.0.1" }
+directories = { version = "5.0.0" }
 log = "0.4.17"
-rusqlite = { version = "0.28.0", features = ["bundled"] }
+rusqlite = { version = "0.29.0", features = ["bundled"] }
 rusqlite_migration = "1.0.1"

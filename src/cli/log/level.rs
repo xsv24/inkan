@@ -1,7 +1,7 @@
-use clap::clap_derive::ArgEnum;
+use clap::ValueEnum;
 use log::LevelFilter;
 
-#[derive(Clone, Debug, ArgEnum, Default)]
+#[derive(ValueEnum, Clone, Debug, Default)]
 pub enum LogLevel {
     Info,
     Debug,

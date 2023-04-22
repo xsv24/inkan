@@ -60,17 +60,17 @@ impl AppConfig {
     }
 
     fn template_config_dir() -> anyhow::Result<PathBuf> {
-        let project_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
-            .context("Failed to retrieve 'git-kit' config")?;
+        let project_dir = ProjectDirs::from("dev", "xsv24", "inkan")
+            .context("Failed to retrieve 'inkan' config")?;
 
         Ok(project_dir.config_dir().to_owned())
     }
 
     pub fn join_config_filename(repo_root_dir: &AbsolutePath) -> Result<AbsolutePath, Errors> {
         repo_root_dir
-            .join(".git-kit.yml", PathType::File)
+            .join(".inkan.yml", PathType::File)
             .map_err(|e| Errors::Configuration {
-                message: "Failed to load repositories local '.git-kit.yml'".into(),
+                message: "Failed to load repositories local '.inkan.yml'".into(),
                 source: e.into(),
             })
     }
@@ -149,7 +149,7 @@ mod tests {
         // Arrange
         // Mock repo 'local' level configuration
         let repo_root_with_config = std::env::temp_dir();
-        let config_repo = repo_root_with_config.join(".git-kit.yml");
+        let config_repo = repo_root_with_config.join(".inkan.yml");
         let path_buf: PathBuf = config_repo.clone().into();
         std::fs::File::create(&path_buf).unwrap();
 

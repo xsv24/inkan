@@ -6,7 +6,7 @@ on:
       - "[0-9]+.[0-9]+.[0-9]+-pre[0-9]+"
 
 env:
-  BIN_NAME: git-kit
+  BIN_NAME: inkan
 
 jobs:
   github-release:
@@ -31,7 +31,7 @@ jobs:
 
   cargo:
     needs: ["github-release"]
-    uses: xsv24/git-kit/.github/workflows/cargo-publish.yml@binary-relase
+    uses: xsv24/inkan/.github/workflows/cargo-publish.yml@main
     with:
       version: ${{ needs.github-release.version }}
       dry-run: false
@@ -129,7 +129,7 @@ jobs:
       - name: Build archive
         shell: bash
         run: |
-          compressed="git-kit-${{ matrix.target }}"
+          compressed="inkan-${{ matrix.target }}"
           mkdir $compressed
           cp {README.md,LICENSE,templates/conventional.yml,templates/default.yml} "$compressed/"
 

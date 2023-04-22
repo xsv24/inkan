@@ -79,7 +79,7 @@ impl<S: GitSystem> adapters::Git for Git<S> {
 
     fn template_file_path(&self) -> Result<AbsolutePath, GitError> {
         // Template file and stored in the .git directory to avoid users having to adding to their .gitignore
-        // In future maybe we could make our own .git-kit dir to house config / templates along with this.
+        // In future maybe we could make our own .inkan dir to house config / templates along with this.
         let path: PathBuf = self.root_directory()?.into();
 
         let path: AbsolutePath = path
@@ -181,7 +181,7 @@ mod tests {
     fn repository_name_returns_this_repo_name() {
         let git = Git { git: GitCommand };
         let repo = git.repository_name().unwrap();
-        assert_eq!(repo, "git-kit");
+        assert_eq!(repo, "inkan");
     }
 
     #[test]

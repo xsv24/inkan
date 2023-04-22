@@ -126,6 +126,6 @@ jobs:
           args: --target=${{ matrix.target }}
 
   cargo-check:
-    uses: xsv24/git-kit/.github/workflows/cargo-publish.yml@binary-relase
+    uses: xsv24/inkan/.github/workflows/cargo-publish.yml@main
     with:
       dry-run: true
