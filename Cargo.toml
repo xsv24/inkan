@@ -1,5 +1,5 @@
 [package]
-name = "inkan"
+name = "git-kit"
 version = "0.0.15"
 edition = "2021"
 authors = ["Thomas Pearson thomaspearson.dev@gmail.com"]
