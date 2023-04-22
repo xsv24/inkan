@@ -1,5 +1,5 @@
 use clap::Parser;
-use git_kit::{adapters::prompt::Prompt, cli::error::display_error, entry::Cli};
+use inkan::{adapters::prompt::Prompt, cli::error::display_error, entry::Cli};
 
 fn main() -> anyhow::Result<()> {
     // TODO: Dynamic builder + derive https://docs.rs/clap/latest/clap/_derive/index.html#mixing-builder-and-derive-apis
