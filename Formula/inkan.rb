@@ -1,4 +1,4 @@
-class GitKitBin < Formula
+class InkanBin < Formula
     version '0.0.22-pre1'
     desc "git cli containing templates & utilities."
     homepage "https://github.com/xsv24/git-kit"
@@ -37,6 +37,6 @@ class GitKitBin < Formula
       #
       # The installed folder is not in the path, so use the entire path to any
       # executables being tested: `system "#{bin}/program", "do", "something"`.
-      system "#{bin}/git-kit"
+      system "#{bin}/inkan"
     end
   end

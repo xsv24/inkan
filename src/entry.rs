@@ -18,8 +18,8 @@ pub enum Interactive {
 }
 
 #[derive(Debug, Parser)]
-#[clap(name = "git-kit")]
-#[clap(bin_name = "git-kit")]
+#[clap(name = "inkan")]
+#[clap(bin_name = "inkan")]
 #[clap(about = "git cli containing templates & utilities.", long_about = None)]
 #[clap(version)]
 pub struct Cli {
@@ -50,7 +50,7 @@ impl Cli {
 
         let mut connection = AppConfig::db_connection()?;
 
-        let config_dir = ProjectDirs::from("dev", "xsv24", "git-kit")
+        let config_dir = ProjectDirs::from("dev", "xsv24", "inkan")
             .ok_or(anyhow::anyhow!("Failed to load configuration"))?;
 
         let config_dir = config_dir.config_dir();

@@ -3,7 +3,7 @@
 # exit on any error
 set -eu
 
-NAME="git-kit"
+NAME="inkan"
 BIN=${BIN:-"/usr/local/bin"}
 
 # colors

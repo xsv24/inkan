@@ -187,7 +187,7 @@ impl domain::adapters::Store for Sqlite {
 
         self.connection
             .close()
-            .map_err(|_| anyhow!("Failed to close 'git-kit' connection"))?;
+            .map_err(|_| anyhow!("Failed to close 'inkan' connection"))?;
 
         Ok(())
     }
