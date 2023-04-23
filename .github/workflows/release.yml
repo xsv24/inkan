@@ -14,17 +14,17 @@ jobs:
     steps:
       - name: Environment variables
         run: |
-          echo "TAG=$(echo $GITHUB_REF | cut -d '/' -f 3)" >> $GITHUB_ENV
+          echo "TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
           echo "version is: ${{ env.TAG }}"
 
-      - name: Create GitHub release
-        id: release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.TAG }}
-          release_name: ${{ env.TAG }}
+      # - name: Create GitHub release
+      #   id: release
+      #   uses: actions/create-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     tag_name: ${{ env.TAG }}
+      #     release_name: ${{ env.TAG }}
     outputs:
       upload_url: ${{ steps.release.outputs.upload_url }}
       version: ${{ env.TAG }}
@@ -36,124 +36,124 @@ jobs:
       version: ${{ needs.github-release.version }}
       dry-run: false
 
-  build:
-    name: Build
-    runs-on: ${{ matrix.os }}
-    needs: ["github-release"]
-    strategy:
-      fail-fast: true
-      matrix:
-        build: [
-            linux-x86,
-            linux-i686,
-            linux-aarch64,
-            linux-arm,
-            macos-x86,
-            macos-arm,
-            win-msvc,
-            win32-msvc,
-            # win-gnu,
-          ]
-        # List of OS versions https://github.com/actions/runner-images
-        include:
-          - build: linux-x86
-            os: ubuntu-22.04
-            target: x86_64-unknown-linux-musl
+  # build:
+  #   name: Build
+  #   runs-on: ${{ matrix.os }}
+  #   needs: ["github-release"]
+  #   strategy:
+  #     fail-fast: true
+  #     matrix:
+  #       build: [
+  #           linux-x86,
+  #           linux-i686,
+  #           linux-aarch64,
+  #           linux-arm,
+  #           macos-x86,
+  #           macos-arm,
+  #           win-msvc,
+  #           win32-msvc,
+  #           # win-gnu,
+  #         ]
+  #       # List of OS versions https://github.com/actions/runner-images
+  #       include:
+  #         - build: linux-x86
+  #           os: ubuntu-22.04
+  #           target: x86_64-unknown-linux-musl
 
-          - build: linux-i686
-            os: ubuntu-22.04
-            target: i686-unknown-linux-musl
+  #         - build: linux-i686
+  #           os: ubuntu-22.04
+  #           target: i686-unknown-linux-musl
 
-          - build: linux-aarch64
-            os: ubuntu-22.04
-            target: aarch64-unknown-linux-musl
+  #         - build: linux-aarch64
+  #           os: ubuntu-22.04
+  #           target: aarch64-unknown-linux-musl
 
-          - build: linux-arm
-            os: ubuntu-22.04
-            target: arm-unknown-linux-gnueabihf
+  #         - build: linux-arm
+  #           os: ubuntu-22.04
+  #           target: arm-unknown-linux-gnueabihf
 
-          - build:
-            os: ubuntu-22.04
-            target: x86_64-unknown-freebsd
+  #         - build:
+  #           os: ubuntu-22.04
+  #           target: x86_64-unknown-freebsd
 
-          - build: macos-x86
-            os: macos-12
-            target: x86_64-apple-darwin
+  #         - build: macos-x86
+  #           os: macos-12
+  #           target: x86_64-apple-darwin
 
-          - build: macos-arm
-            os: macos-12
-            target: aarch64-apple-darwin
+  #         - build: macos-arm
+  #           os: macos-12
+  #           target: aarch64-apple-darwin
 
-          - build: win-msvc
-            os: windows-2022
-            target: x86_64-pc-windows-msvc
+  #         - build: win-msvc
+  #           os: windows-2022
+  #           target: x86_64-pc-windows-msvc
 
-          - build: win32-msvc
-            os: windows-2022
-            target: i686-pc-windows-msvc
+  #         - build: win32-msvc
+  #           os: windows-2022
+  #           target: i686-pc-windows-msvc
 
-          # - build: win-gnu
-          #   os: windows-2022
-          #   target: x86_64-pc-windows-gnu
+  #         # - build: win-gnu
+  #         #   os: windows-2022
+  #         #   target: x86_64-pc-windows-gnu
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v2
 
-      - name: Install ${{ matrix.target }} toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
+  #     - name: Install ${{ matrix.target }} toolchain
+  #       uses: actions-rs/toolchain@v1
+  #       with:
+  #         toolchain: stable
+  #         target: ${{ matrix.target }}
+  #         override: true
 
-      - name: Build release binary
-        uses: actions-rs/cargo@v1
-        env:
-          BUILD_DISABLED: "true" # Disable the "build.rs" file from running
-        with:
-          use-cross: true
-          command: build
-          args: --verbose --release --target=${{ matrix.target }}
+  #     - name: Build release binary
+  #       uses: actions-rs/cargo@v1
+  #       env:
+  #         BUILD_DISABLED: "true" # Disable the "build.rs" file from running
+  #       with:
+  #         use-cross: true
+  #         command: build
+  #         args: --verbose --release --target=${{ matrix.target }}
 
-      - name: Strip release binary (linux-x86 and macos)
-        if: matrix.build == 'linux-x86' || matrix.build == 'macos-x86' || matrix.build == 'macos-arm'
-        run: strip "target/${{ matrix.target }}/release/$BIN_NAME"
+  #     - name: Strip release binary (linux-x86 and macos)
+  #       if: matrix.build == 'linux-x86' || matrix.build == 'macos-x86' || matrix.build == 'macos-arm'
+  #       run: strip "target/${{ matrix.target }}/release/$BIN_NAME"
 
-      - name: Strip release binary (linux-arm)
-        if: matrix.build == 'linux-arm'
-        run: |
-          sudo apt-get install -y binutils-arm-linux-gnueabihf
-          arm-linux-gnueabihf-strip target/arm-unknown-linux-gnueabihf/release/$BIN_NAME
+  #     - name: Strip release binary (linux-arm)
+  #       if: matrix.build == 'linux-arm'
+  #       run: |
+  #         sudo apt-get install -y binutils-arm-linux-gnueabihf
+  #         arm-linux-gnueabihf-strip target/arm-unknown-linux-gnueabihf/release/$BIN_NAME
 
-      - name: Build archive
-        shell: bash
-        run: |
-          compressed="inkan-${{ matrix.target }}"
-          mkdir $compressed
-          cp {README.md,LICENSE,templates/conventional.yml,templates/default.yml} "$compressed/"
+  #     - name: Build archive
+  #       shell: bash
+  #       run: |
+  #         compressed="inkan-${{ matrix.target }}"
+  #         mkdir $compressed
+  #         cp {README.md,LICENSE,templates/conventional.yml,templates/default.yml} "$compressed/"
 
-          if [ "${{ matrix.os }}" = "windows-2022" ]; then
-            cp "target/${{ matrix.target }}/release/$BIN_NAME.exe" "$compressed/"
-            7z a "$compressed.zip" "$compressed"
-            echo "ASSET=$compressed.zip" >> $GITHUB_ENV
-          else
-            cp "target/${{ matrix.target }}/release/$BIN_NAME" "$compressed/"
-            tar czf "$compressed.tar.gz" "$compressed"
-            echo "ASSET=$compressed.tar.gz" >> $GITHUB_ENV
-          fi
+  #         if [ "${{ matrix.os }}" = "windows-2022" ]; then
+  #           cp "target/${{ matrix.target }}/release/$BIN_NAME.exe" "$compressed/"
+  #           7z a "$compressed.zip" "$compressed"
+  #           echo "ASSET=$compressed.zip" >> $GITHUB_ENV
+  #         else
+  #           cp "target/${{ matrix.target }}/release/$BIN_NAME" "$compressed/"
+  #           tar czf "$compressed.tar.gz" "$compressed"
+  #           echo "ASSET=$compressed.tar.gz" >> $GITHUB_ENV
+  #         fi
 
-      - uses: actions/upload-artifact@v2.2.4
-        with:
-          name: bins-${{ matrix.build }}
-          path: ${{ env.ASSET }}
+  #     - uses: actions/upload-artifact@v2.2.4
+  #       with:
+  #         name: bins-${{ matrix.build }}
+  #         path: ${{ env.ASSET }}
 
-      - name: Upload release archive
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.github-release.outputs.upload_url }}
-          asset_path: ${{ env.ASSET }}
-          asset_name: ${{ env.ASSET }}
-          asset_content_type: application/octet-stream
+  #     - name: Upload release archive
+  #       uses: actions/upload-release-asset@v1.0.2
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       with:
+  #         upload_url: ${{ needs.github-release.outputs.upload_url }}
+  #         asset_path: ${{ env.ASSET }}
+  #         asset_name: ${{ env.ASSET }}
+  #         asset_content_type: application/octet-stream
