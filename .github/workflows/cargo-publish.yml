@@ -63,7 +63,7 @@ jobs:
 
       - name: Update Cargo.toml version
         run: |
-          cargo release version ${{ inputs.version }} --no-confirm --execute
+          cargo release version --no-confirm --execute ${{ inputs.version }}
 
       # Publish and allow dirty since the Cargo.toml version is changed.
       - name: Publish package
