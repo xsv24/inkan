@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::domain::{errors::GitError, models::path::AbsolutePath};
 
@@ -29,7 +29,7 @@ pub trait Git {
     fn checkout(&self, name: &str, status: CheckoutStatus) -> Result<(), GitError>;
 
     /// Get the commit file path for the current repository.
-    fn template_file_path(&self) -> Result<AbsolutePath, GitError>;
+    fn template_file_path(&self) -> Result<PathBuf, GitError>;
 
     /// Commit changes and open and editor with template file.
     fn commit_with_template(

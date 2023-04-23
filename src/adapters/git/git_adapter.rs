@@ -77,21 +77,12 @@ impl<S: GitSystem> adapters::Git for Git<S> {
         Ok(())
     }
 
-    fn template_file_path(&self) -> Result<AbsolutePath, GitError> {
+    fn template_file_path(&self) -> Result<PathBuf, GitError> {
         // Template file and stored in the .git directory to avoid users having to adding to their .gitignore
         // In future maybe we could make our own .inkan dir to house config / templates along with this.
         let path: PathBuf = self.root_directory()?.into();
 
-        let path: AbsolutePath = path
-            .join(".git")
-            .join("INKAN_COMMIT_TEMPLATE")
-            .try_into()
-            .map_err(|e| {
-                log::error!("{}", e);
-                GitError::Validation {
-                    message: "Failed to build template file path".into(),
-                }
-            })?;
+        let path = path.join(".git").join("INKAN_COMMIT_TEMPLATE");
 
         Ok(path)
     }
