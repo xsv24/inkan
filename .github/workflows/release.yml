@@ -12,10 +12,8 @@ jobs:
   github-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Environment variables
-        run: |
-          echo "TAG=$(echo $GITHUB_REF | cut -d '/' -f 3)" >> $GITHUB_ENV
-          echo "version is: ${{ env.TAG }}"
+      - name: Checkout
+        uses: actions/checkout@v2
 
       - name: Create GitHub release
         id: release
@@ -23,17 +21,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.TAG }}
-          release_name: ${{ env.TAG }}
+          tag_name: ${{ github.ref_name }}
+          release_name: ${{ github.ref_name }}
+
     outputs:
       upload_url: ${{ steps.release.outputs.upload_url }}
-      version: ${{ env.TAG }}
+      version: ${{ github.ref_name }}
 
   cargo:
     needs: ["github-release"]
     uses: xsv24/inkan/.github/workflows/cargo-publish.yml@main
     with:
-      version: ${{ needs.github-release.version }}
+      version: ${{ github.ref_name }}
       dry-run: false
 
   build:
