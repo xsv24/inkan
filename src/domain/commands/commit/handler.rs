@@ -25,8 +25,6 @@ pub fn handler<G: Git, S: Store>(git: &G, store: &S, commit: Commit) -> Result<S
 
     let template_file = git.template_file_path().map_err(Errors::Git)?;
 
-    let template_file: PathBuf = template_file.into();
-
     std::fs::write(&template_file, &contents).map_err(|_| Errors::ValidationError {
         message: "Failed attempting to write commit template file".into(),
     })?;
