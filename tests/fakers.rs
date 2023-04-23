@@ -76,7 +76,7 @@ pub struct GitCommandMock {
     pub branch_name: Result<String, String>,
     pub checkout_res: fn(&str, CheckoutStatus) -> Result<(), GitError>,
     pub commit_res: fn(&Path, CommitMsgStatus) -> Result<(), GitError>,
-    pub template_file_path: fn() -> Result<AbsolutePath, GitError>,
+    pub template_file_path: fn() -> Result<PathBuf, GitError>,
 }
 
 impl GitCommandMock {
@@ -86,7 +86,7 @@ impl GitCommandMock {
             branch_name: Ok(Faker.fake()),
             checkout_res: |_, _| Ok(()),
             commit_res: |_, _| Ok(()),
-            template_file_path: || Ok(VALID_FILE_PATH.clone()),
+            template_file_path: || Ok(VALID_FILE_PATH.clone().into()),
         }
     }
 }
@@ -114,7 +114,7 @@ impl Git for GitCommandMock {
         panic!("Did not expect Git 'root_directory' to be called.");
     }
 
-    fn template_file_path(&self) -> Result<AbsolutePath, GitError> {
+    fn template_file_path(&self) -> Result<PathBuf, GitError> {
         (self.template_file_path)()
     }
 
