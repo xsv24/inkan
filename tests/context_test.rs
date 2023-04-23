@@ -1,7 +1,7 @@
 mod fakers;
 
 use fake::{Fake, Faker};
-use git_kit::domain::{
+use inkan::domain::{
     adapters::Store,
     commands::context::{handler, Context},
     models::Branch,

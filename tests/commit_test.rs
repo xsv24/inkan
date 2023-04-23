@@ -2,7 +2,7 @@ mod fakers;
 
 use crate::fakers::{fake_config, fake_context, GitCommandMock};
 use fake::{Fake, Faker};
-use git_kit::{
+use inkan::{
     adapters::sqlite::Sqlite,
     domain::{
         adapters::{CommitMsgStatus, Git, Store},

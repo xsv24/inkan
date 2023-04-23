@@ -2,7 +2,7 @@ use chrono::Utc;
 use std::path::{Path, PathBuf};
 
 use fake::{Fake, Faker};
-use git_kit::{
+use inkan::{
     adapters::sqlite::Sqlite,
     app_context::AppContext,
     domain::{

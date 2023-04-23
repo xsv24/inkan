@@ -84,7 +84,7 @@ impl<S: GitSystem> adapters::Git for Git<S> {
 
         let path: AbsolutePath = path
             .join(".git")
-            .join("GIT_KIT_COMMIT_TEMPLATE")
+            .join("INKAN_COMMIT_TEMPLATE")
             .try_into()
             .map_err(|e| {
                 log::error!("{}", e);
