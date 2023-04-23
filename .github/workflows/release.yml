@@ -16,13 +16,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Environment variables
-        run: |
-          echo "TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-          echo "version is: ${{ env.TAG }}"
-          echo "version is: $TAG"
-          echo "version is: ${{ github.ref_name }}"
-
       # - name: Create GitHub release
       #   id: release
       #   uses: actions/create-release@v1
@@ -33,7 +26,7 @@ jobs:
       #     release_name: ${{ env.TAG }}
     outputs:
       upload_url: ${{ steps.release.outputs.upload_url }}
-      version: ${{ env.TAG }}
+      version: ${{ github.ref_name }}
 
   cargo:
     needs: ["github-release"]
