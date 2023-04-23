@@ -7,8 +7,9 @@ on:
 
 jobs:
   cargo:
-    needs: ["github-release"]
-    uses: xsv24/inkan/.github/workflows/cargo-publish.yml@main
+    uses: xsv24/inkan/.github/workflows/cargo-publish.yml@readme-fix
     with:
       version: ${{ github.ref_name }}
       dry-run: false
+    secrets:
+      token:  ${{ secrets.CARGO_TOKEN }}
