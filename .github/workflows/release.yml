@@ -21,6 +21,7 @@ jobs:
           echo "TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
           echo "version is: ${{ env.TAG }}"
           echo "version is: $TAG"
+          echo "version is: ${{ github.ref_name }}"
 
       # - name: Create GitHub release
       #   id: release
