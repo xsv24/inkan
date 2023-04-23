@@ -1,5 +1,5 @@
 [![crates.io](https://img.shields.io/crates/v/inkan?label=%F0%9F%93%A6%20inkan&style=flat-square)](https://crates.io/crates/inkan)
-[![Main branch tests](https://img.shields.io/github/actions/workflow/status/xsv24/inkan/commit.yml?branch=main&label=%F0%9F%A7%AA%20tests&style=flat-square)](https://img.shields.io/github/actions/workflow/status/xsv24/inkan/actions)
+[![Main branch tests](https://img.shields.io/github/actions/workflow/status/xsv24/inkan/commit.yml?label=%F0%9F%A7%AA%20tests&style=flat-square)](https://img.shields.io/github/actions/workflow/status/xsv24/inkan/actions)
 [![license](https://img.shields.io/github/license/xsv24/inkan?color=blue&style=flat-square&logo=)](./LICENSE)
 
 # 🖋 inkan
