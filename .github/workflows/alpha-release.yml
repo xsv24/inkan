@@ -11,3 +11,5 @@ jobs:
     with:
       version: ${{ github.ref_name }}
       dry-run: false
+    secrets:
+      token:  ${{ secrets.CARGO_TOKEN }}

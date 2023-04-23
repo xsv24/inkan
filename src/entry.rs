@@ -29,7 +29,7 @@ pub struct Cli {
     config: Option<String>,
 
     /// Log level
-    #[clap(value_enum, long, default_value_t=LogLevel::None)]
+    #[clap(value_enum, short, long, default_value_t=LogLevel::None)]
     log: LogLevel,
 
     /// Interactive prompts
