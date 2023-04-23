@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::{
     domain::{
         adapters::{CommitMsgStatus, Git, Store},
