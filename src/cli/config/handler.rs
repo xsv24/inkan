@@ -22,7 +22,7 @@ pub fn handler<S: Store, P: Prompter>(
         Arguments::Add(args) => add(args, store),
         Arguments::Set(args) => set(args, store, prompt, interactive),
         Arguments::Reset => reset(store),
-        Arguments::Show => list(store),
+        Arguments::List => list(store),
     }?;
 
     Ok(())
