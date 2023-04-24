@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug, Clone, Args, PartialEq, Eq)]
 pub struct Arguments {
     /// Issue ticket number related to the current branch.
-    #[clap(value_parser)]
+    #[clap(short, long, value_parser)]
     pub ticket: Option<String>,
 
     /// Short describing a section of the codebase the changes relate to.

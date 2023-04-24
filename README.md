@@ -284,3 +284,11 @@ inkan commit custom \
  --message "Dang!"
 ```
 > [TICKET-123] 🤘 Dang!
+
+## TODO
+
+- [x] Prompts for commit message, link and so forth
+- [] Clean up configuration templates
+- [] PR template with checkbox automation
+- [] Shell completion scripts
+- [] Prompts for other commands
