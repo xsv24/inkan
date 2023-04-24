@@ -1,19 +1,15 @@
 use crate::{
     domain::{
-        adapters::{CommitMsgStatus, Git, Store},
+        adapters::{CommitMsgStatus, Git},
         errors::Errors,
+        models::Branch,
     },
     utils::string::OptionStr,
 };
 
 use super::Commit;
 
-pub fn handler<G: Git, S: Store>(git: &G, store: &S, commit: Commit) -> Result<String, Errors> {
-    let branch_name = git.branch_name().map_err(Errors::Git)?;
-    let repo_name = git.repository_name().map_err(Errors::Git)?;
-
-    let branch = store.get_branch(&branch_name, &repo_name).ok();
-
+pub fn handler<G: Git>(git: &G, branch: Option<Branch>, commit: Commit) -> Result<String, Errors> {
     let contents = commit
         .commit_message(commit.template.content.clone(), branch)
         .map_err(|e| Errors::Configuration {

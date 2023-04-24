@@ -18,8 +18,8 @@ pub enum Arguments {
     Add(ConfigAdd),
     /// Switch to another config file.
     Set(ConfigSet),
-    /// Display the current config in use.
-    Show,
+    /// List registered template configurations.
+    List,
     /// Reset to the default config.
     Reset,
 }
