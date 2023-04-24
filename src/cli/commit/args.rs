@@ -3,38 +3,37 @@ use std::{collections::HashMap, fmt::Debug};
 use clap::Args;
 
 use crate::{
+    cli::context,
     domain::{
         adapters::prompt::{Prompter, SelectItem},
         commands::commit::Commit,
         errors::UserInputError,
+        models::Branch,
     },
     entry::Interactive,
     template_config::{Template, TemplateConfig},
 };
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
+#[group(skip)]
 pub struct Arguments {
     /// Name of the commit template to be used.
     pub template: Option<String>,
-
-    /// Issue ticket number related to the commit.
-    #[clap(short, long, value_parser)]
-    pub ticket: Option<String>,
 
     /// Message for the commit.
     #[clap(short, long, value_parser)]
     pub message: Option<String>,
 
-    /// Short describing a section of the codebase the changes relate to.
-    #[clap(short, long, value_parser)]
-    pub scope: Option<String>,
+    #[clap(flatten)]
+    pub context: context::Arguments,
 }
 
 impl Arguments {
     pub fn try_into_domain<P: Prompter>(
         &self,
         config: &TemplateConfig,
-        prompter: P,
+        branch: &Option<Branch>,
+        prompter: &P,
         interactive: &Interactive,
     ) -> Result<Commit, UserInputError> {
         let template = match &self.template {
@@ -42,25 +41,29 @@ impl Arguments {
             None => Self::prompt_template_select(
                 config.commit.templates.clone(),
                 prompter,
-                interactive.to_owned(),
+                interactive,
             )?,
         };
 
-        // TODO: Could we do a prompt if no ticket / args found ?
+        let context = self
+            .context
+            .try_into_domain(prompter, interactive, branch)?;
+
         Ok(Commit {
             template: config.get_template_config(&template)?.clone(),
-            ticket: self.ticket.clone(),
             message: self.message.clone(),
-            scope: self.scope.clone(),
+            ticket: context.ticket,
+            scope: context.scope,
+            link: context.link,
         })
     }
 
     fn prompt_template_select<P: Prompter>(
         templates: HashMap<String, Template>,
-        prompter: P,
-        interactive: Interactive,
+        prompter: &P,
+        interactive: &Interactive,
     ) -> Result<String, UserInputError> {
-        if interactive == Interactive::Disable {
+        if interactive == &Interactive::Disable {
             return Err(UserInputError::Required {
                 name: "template".into(),
             });
@@ -109,21 +112,23 @@ mod tests {
             text_result: Err(anyhow::anyhow!("text should not be called")),
         };
 
-        let actual = args
-            .clone()
-            .try_into_domain(&config, prompt, &Interactive::Disable)?;
+        let actual =
+            args.clone()
+                .try_into_domain(&config, &None, &prompt, &Interactive::Disable)?;
 
         let expected = Commit {
             template: value,
-            ticket: args.ticket.clone(),
-            scope: args.scope.clone(),
+            ticket: args.context.ticket.clone(),
+            scope: args.context.scope.clone(),
             message: args.message.clone(),
+            link: args.context.link,
         };
 
         assert_eq!(expected.template.content, actual.template.content);
         assert_eq!(expected.message, actual.message);
         assert_eq!(expected.scope, actual.scope);
         assert_eq!(expected.ticket, actual.ticket);
+        assert_eq!(expected.link, actual.link);
 
         Ok(())
     }
@@ -135,9 +140,12 @@ mod tests {
 
         let args = Arguments {
             template: None,
-            ticket: None,
-            scope: None,
             message: None,
+            context: context::Arguments {
+                ticket: None,
+                scope: None,
+                link: None,
+            },
         };
 
         let config = fake_template_config(Some((key.clone(), value.clone())));
@@ -151,19 +159,22 @@ mod tests {
 
         let actual = args
             .clone()
-            .try_into_domain(&config, prompt, &Interactive::Enable)?;
+            .try_into_domain(&config, &None, &prompt, &Interactive::Enable)?;
 
         let expected = Commit {
             template: value,
             ticket: text_prompt.clone(),
             scope: text_prompt.clone(),
             message: text_prompt.clone(),
+            link: text_prompt.clone(),
         };
 
         assert_eq!(expected.template.description, actual.template.description);
+        assert_eq!(expected.scope, actual.scope);
+        assert_eq!(expected.ticket, actual.ticket);
+        assert_eq!(expected.link, actual.link);
+
         assert_eq!(args.message, actual.message);
-        assert_eq!(args.scope, actual.scope);
-        assert_eq!(args.ticket, actual.ticket);
 
         Ok(())
     }
@@ -176,9 +187,12 @@ mod tests {
 
         let args = Arguments {
             template: Some(key.clone()),
-            ticket: Some(Faker.fake()),
-            scope: Some(Faker.fake()),
             message: Some(Faker.fake()),
+            context: context::Arguments {
+                ticket: Some(Faker.fake()),
+                scope: Some(Faker.fake()),
+                link: Some(Faker.fake()),
+            },
             ..fake_args()
         };
 
@@ -191,19 +205,21 @@ mod tests {
 
         let actual = args
             .clone()
-            .try_into_domain(&config, prompt, &Interactive::Enable)?;
+            .try_into_domain(&config, &None, &prompt, &Interactive::Enable)?;
 
         let expected = Commit {
             template: value,
-            ticket: args.ticket.clone(),
-            scope: args.scope.clone(),
+            ticket: args.context.ticket.clone(),
+            scope: args.context.scope.clone(),
             message: args.message.clone(),
+            link: args.context.link,
         };
 
         assert_eq!(expected.template.description, actual.template.description);
         assert_eq!(expected.message, actual.message);
         assert_eq!(expected.scope, actual.scope);
         assert_eq!(expected.ticket, actual.ticket);
+        assert_eq!(expected.link, actual.link);
 
         Ok(())
     }
@@ -225,7 +241,7 @@ mod tests {
 
         let error = args
             .clone()
-            .try_into_domain(&config, prompt, &Interactive::Disable)
+            .try_into_domain(&config, &None, &prompt, &Interactive::Disable)
             .unwrap_err();
 
         assert_eq!(error.to_string(), "Missing required \"template\" input");
@@ -295,8 +311,11 @@ mod tests {
     fn fake_args() -> Arguments {
         Arguments {
             template: Faker.fake(),
-            ticket: Faker.fake(),
-            scope: Faker.fake(),
+            context: context::Arguments {
+                ticket: Faker.fake(),
+                scope: Faker.fake(),
+                link: Faker.fake(),
+            },
             message: Faker.fake(),
         }
     }

@@ -37,8 +37,8 @@ fn commit_message_with_all_arguments_are_injected_into_the_template_with_nothing
     };
 
     // Act
-    let contents = handler(&context.git, &context.store, args.clone())
-        .expect("Error performing 'commit' action");
+    let contents =
+        handler(&context.git, None, args.clone()).expect("Error performing 'commit' action");
 
     // Assert
     let expected = format!(
@@ -74,12 +74,13 @@ fn commit_message_with_no_args_or_stored_branch_defaults_correctly() -> anyhow::
         ticket: None,
         message: None,
         scope: None,
+        link: None,
         template: template_config,
     };
 
     // Act
-    let contents = handler(&context.git, &context.store, args.clone())
-        .expect("Error performing 'commit' action");
+    let contents =
+        handler(&context.git, None, args.clone()).expect("Error performing 'commit' action");
 
     // Assert
     assert_eq!("message: '', scope: '', link: ''", contents);
@@ -99,6 +100,7 @@ fn commit_message_with_no_commit_args_defaults_to_stored_branch_values() -> anyh
         message: Some(Faker.fake()),
         ticket: None,
         scope: None,
+        link: None,
     };
 
     let context = fake_context(GitCommandMock::fake(), fake_config())?;
@@ -115,7 +117,7 @@ fn commit_message_with_no_commit_args_defaults_to_stored_branch_values() -> anyh
     setup_db(&context.store, Some(&branch))?;
 
     // Act
-    let commit_message = handler(&context.git, &context.store, args.clone())
+    let commit_message = handler(&context.git, Some(branch.clone()), args.clone())
         .expect("Error performing 'commit' action");
 
     // Assert
@@ -150,6 +152,7 @@ fn fake_commit_args() -> Commit {
         ticket: Faker.fake(),
         message: Faker.fake(),
         scope: Faker.fake(),
+        link: Faker.fake(),
     }
 }
 

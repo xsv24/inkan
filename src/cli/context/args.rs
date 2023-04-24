@@ -9,7 +9,7 @@ use crate::{
     utils::or_else_try::OrElseTry,
 };
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, Args, PartialEq, Eq)]
 pub struct Arguments {
     /// Issue ticket number related to the current branch.
     #[clap(value_parser)]
@@ -27,23 +27,23 @@ pub struct Arguments {
 impl Arguments {
     pub fn try_prompt_with_defaults<P: Prompter>(
         &self,
-        branch: Option<Branch>,
-        prompt: P,
+        branch: &Option<Branch>,
+        prompt: &P,
     ) -> Result<Context, UserInputError> {
         let ticket = self
             .ticket
             .clone()
-            .or_else_try(|| prompt.text("Ticket:", branch.clone().map(|b| b.ticket)))?;
+            .or_else_try(|| prompt.text("Ticket", branch.as_ref().map(|b| b.ticket.clone())))?;
 
         let scope = self
             .scope
             .clone()
-            .or_else_try(|| prompt.text("Scope:", branch.clone().and_then(|b| b.scope)))?;
+            .or_else_try(|| prompt.text("Scope", branch.as_ref().and_then(|b| b.scope.clone())))?;
 
         let link = self
             .link
             .clone()
-            .or_else_try(|| prompt.text("Link:", branch.and_then(|b| b.link)))?;
+            .or_else_try(|| prompt.text("Link", branch.as_ref().and_then(|b| b.link.clone())))?;
 
         Ok(Context {
             ticket,
@@ -54,9 +54,9 @@ impl Arguments {
 
     pub fn try_into_domain<P: Prompter>(
         &self,
-        prompt: P,
+        prompt: &P,
         interactive: &Interactive,
-        branch: Option<Branch>,
+        branch: &Option<Branch>,
     ) -> Result<Context, UserInputError> {
         let domain = match interactive {
             Interactive::Enable => self.try_prompt_with_defaults(branch, prompt)?,
@@ -92,7 +92,7 @@ mod tests {
 
         let actual = args
             .clone()
-            .try_into_domain(prompt, &Interactive::Disable, None)?;
+            .try_into_domain(&prompt, &Interactive::Disable, &None)?;
 
         let expected = Context {
             ticket: args.ticket.clone(),
@@ -123,7 +123,7 @@ mod tests {
 
         let actual = args
             .clone()
-            .try_into_domain(prompt, &Interactive::Enable, None)?;
+            .try_into_domain(&prompt, &Interactive::Enable, &None)?;
 
         let expected = Context {
             ticket: text_prompt.clone(),
@@ -152,7 +152,7 @@ mod tests {
 
         let actual = args
             .clone()
-            .try_into_domain(prompt, &Interactive::Enable, None)?;
+            .try_into_domain(&prompt, &Interactive::Enable, &None)?;
 
         let expected = Context {
             ticket: args.ticket.clone(),

@@ -16,11 +16,10 @@ pub fn handler<G: Git, S: Store, P: Prompter>(
 ) -> Result<(), Errors> {
     let repo_name = context.git.repository_name().map_err(Errors::Git)?;
     let branch_name = context.git.branch_name().map_err(Errors::Git)?;
-
     let branch = context.store.get_branch(&branch_name, &repo_name).ok();
 
     let args = args
-        .try_into_domain(prompt, &context.interactive, branch)
+        .try_into_domain(&prompt, &context.interactive, &branch)
         .map_err(Errors::UserInput)?;
 
     context::handler(&context.git, &context.store, args)?;

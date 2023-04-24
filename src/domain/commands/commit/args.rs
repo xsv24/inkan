@@ -10,6 +10,7 @@ pub struct Commit {
     pub ticket: Option<String>,
     pub message: Option<String>,
     pub scope: Option<String>,
+    pub link: Option<String>,
 }
 
 impl Commit {
@@ -204,6 +205,7 @@ mod tests {
             ticket: Faker.fake(),
             message: Faker.fake(),
             scope: Faker.fake(),
+            link: Faker.fake(),
         }
     }
 }
