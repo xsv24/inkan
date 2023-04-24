@@ -18,7 +18,7 @@ pub enum Arguments {
     Add(ConfigAdd),
     /// Switch to another config file.
     Set(ConfigSet),
-    /// List registered configurations in use.
+    /// List registered template configurations.
     List,
     /// Reset to the default config.
     Reset,
