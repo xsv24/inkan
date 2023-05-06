@@ -1,8 +1,8 @@
-use crate::domain::{
+use crate::{domain::{
     adapters::{CheckoutStatus, Git, Store},
     errors::Errors,
-    models::Branch,
-};
+    models::Branch, template::Templator,
+}, template_config::TemplateConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Checkout {
@@ -16,9 +16,39 @@ pub struct Checkout {
     pub link: Option<String>,
 }
 
-pub fn handler<G: Git, S: Store>(git: &G, store: &S, args: Checkout) -> Result<Branch, Errors> {
+fn build_branch_name(args: &Checkout, template: &TemplateConfig) -> anyhow::Result<String> {
+    let args = args.clone();
+
+    let mut contents = template.branch.content
+        .replace_or_remove("name", Some(args.name))?
+        .replace_or_remove("ticket_num", args.ticket)?
+        .replace_or_remove("scope", args.scope)?;
+
+    if let Some(params) = &template.params {
+        for (key, value)in params {
+            contents = contents.replace_or_remove(key, Some(value.clone()))?;
+        }
+    } 
+
+    Ok(contents)
+}
+
+pub fn handler<G: Git, S: Store>(
+    git: &G,
+    store: &S,
+    template: TemplateConfig,
+    args: Checkout
+) -> Result<Branch, Errors> {
+    // Build name
+    let name = build_branch_name(&args, &template)
+        .map_err(|e| Errors::ValidationError {
+                message: "Failed to build branch name from the specified config".into(),
+                source: Some(e)
+            }
+    )?;
+
     // Attempt to create branch
-    let create = git.checkout(&args.name, CheckoutStatus::New);
+    let create = git.checkout(&name, CheckoutStatus::New);
 
     // If the branch already exists check it out
     if let Err(err) = create {

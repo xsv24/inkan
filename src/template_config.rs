@@ -12,7 +12,15 @@ use crate::{
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TemplateConfig {
+    pub version: u32,
+    pub params: Option<HashMap<String, String>>,
+    pub branch: BranchConfig,
     pub commit: CommitConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct BranchConfig {
+    pub content: String 
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -46,7 +54,6 @@ impl TemplateConfig {
                 source: e.into(),
             }
         })?;
-
         Ok(config)
     }
 

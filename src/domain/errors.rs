@@ -18,7 +18,10 @@ pub enum Errors {
     PersistError(PersistError),
 
     #[error("Validation error occurred {}", .message.to_lowercase())]
-    ValidationError { message: String },
+    ValidationError { 
+        message: String,
+        source: Option<anyhow::Error>
+    },
 }
 
 #[derive(Error, Debug)]
