@@ -2,33 +2,35 @@ use crate::domain::adapters::prompt::Prompter;
 use crate::domain::adapters::Store;
 use crate::domain::errors::{Errors, UserInputError};
 use crate::domain::models::path::{AbsolutePath, PathType};
-use crate::domain::models::{Config, ConfigKey, ConfigStatus};
+use crate::domain::models::{ConfigKey, Template, TemplateStatus};
 use crate::entry::Interactive;
+use crate::template_config::TemplateConfig;
 
-use super::args::{ConfigAdd, ConfigSet};
-use super::Arguments;
+use super::commands::{TemplateAdd, TemplateSet};
+use super::SubCommands;
 use colored::Colorize;
 
 pub fn handler<S: Store, P: Prompter>(
     store: &mut S,
-    config_key: &ConfigKey,
-    arguments: Arguments,
+    config: &Template,
+    arguments: SubCommands,
     prompt: P,
     interactive: &Interactive,
 ) -> Result<(), Errors> {
-    local_config_warning(config_key);
+    local_config_warning(&config.key);
 
     match arguments {
-        Arguments::Add(args) => add(args, store),
-        Arguments::Set(args) => set(args, store, prompt, interactive),
-        Arguments::Reset => reset(store),
-        Arguments::List => list(store),
+        SubCommands::Add(args) => add(args, store),
+        SubCommands::Set(args) => set(args, store, prompt, interactive),
+        SubCommands::Reset => reset(store),
+        SubCommands::List => list(store),
+        SubCommands::Active => active_list(config),
     }?;
 
     Ok(())
 }
 
-fn add<S: Store>(args: ConfigAdd, store: &mut S) -> Result<(), Errors> {
+fn add<S: Store>(args: TemplateAdd, store: &mut S) -> Result<(), Errors> {
     let key = ConfigKey::from(args.name.as_str());
 
     if !key.is_overridable() {
@@ -48,18 +50,18 @@ fn add<S: Store>(args: ConfigAdd, store: &mut S) -> Result<(), Errors> {
         })
         .map_err(Errors::UserInput)?;
 
-    let config = Config {
+    let config = Template {
         key,
         path,
-        status: ConfigStatus::Active,
+        status: TemplateStatus::Active,
     };
 
     store
-        .persist_config(&config)
+        .persist_template(&config)
         .map_err(Errors::PersistError)?;
 
     store
-        .set_active_config(&config.key)
+        .set_active_template(&config.key)
         .map_err(Errors::PersistError)?;
 
     println!("🟢 {} (Active)", config.key.to_string().green());
@@ -68,7 +70,7 @@ fn add<S: Store>(args: ConfigAdd, store: &mut S) -> Result<(), Errors> {
 }
 
 fn set<S: Store, P: Prompter>(
-    args: ConfigSet,
+    args: TemplateSet,
     store: &mut S,
     prompt: P,
     interactive: &Interactive,
@@ -76,18 +78,20 @@ fn set<S: Store, P: Prompter>(
     let key = args.try_into_domain(store, prompt, interactive)?;
 
     store
-        .set_active_config(&key)
+        .set_active_template(&key)
         .map_err(Errors::PersistError)?;
 
-    println!("🟢 {} (Active)", key.to_string().green());
-
+    println!(
+        "{} templates has been successfully added.",
+        key.to_string().green()
+    );
     Ok(())
 }
 
 fn reset<S: Store>(store: &mut S) -> Result<(), Errors> {
     let key = ConfigKey::Default;
     store
-        .set_active_config(&key)
+        .set_active_template(&key)
         .map_err(Errors::PersistError)?;
 
     println!("🟢 Config reset to {}", key.to_string().green());
@@ -96,7 +100,7 @@ fn reset<S: Store>(store: &mut S) -> Result<(), Errors> {
 }
 
 fn list<S: Store>(store: &S) -> Result<(), Errors> {
-    let mut configurations = store.get_configurations().map_err(Errors::PersistError)?;
+    let mut configurations = store.get_templates().map_err(Errors::PersistError)?;
 
     configurations.sort_by_key(|c| c.status.clone());
 
@@ -109,9 +113,24 @@ fn list<S: Store>(store: &S) -> Result<(), Errors> {
             .unwrap_or_else(|| "Invalid configuration path please update".into());
 
         match config.status {
-            ConfigStatus::Active => println!("🟢 {} (Active) ➜ '{}'", key.green(), path),
-            ConfigStatus::Disabled => println!("🔴 {key} ➜ '{path}'"),
+            TemplateStatus::Active => println!("🟢 {} (Active) ➜ '{}'", key.green(), path),
+            TemplateStatus::Disabled => println!("🔴 {key} ➜ '{path}'"),
         }
+    }
+
+    Ok(())
+}
+
+pub fn active_list(config: &Template) -> Result<(), Errors> {
+    log::info!("collect commit templates from config.");
+    let templates = TemplateConfig::new(&config.path)?;
+
+    let mut pairs = templates.commit.templates.into_iter().collect::<Vec<_>>();
+
+    pairs.sort_by_key(|(k, ..)| k.to_owned());
+
+    for (key, value) in pairs {
+        println!("- {} {}.", key.bold().green(), value.description.italic());
     }
 
     Ok(())

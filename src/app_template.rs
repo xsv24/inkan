@@ -11,25 +11,25 @@ use crate::{
         errors::{Errors, UserInputError},
         models::{
             path::{AbsolutePath, PathType},
-            Config, ConfigKey, ConfigStatus,
+            ConfigKey, Template, TemplateStatus,
         },
     },
 };
 
-pub struct AppConfig {
-    pub config: Config,
+pub struct AppTemplate {
+    pub config: Template,
 }
 
-impl AppConfig {
+impl AppTemplate {
     pub fn new<S: GitSystem>(
         once_off_config_path: Option<String>,
         git: &Git<S>,
         store: &Sqlite,
-    ) -> Result<AppConfig, Errors> {
+    ) -> Result<AppTemplate, Errors> {
         let config = match once_off_config_path {
-            Some(path) => Ok(Config {
+            Some(path) => Ok(Template {
                 key: ConfigKey::Once,
-                status: ConfigStatus::Active,
+                status: TemplateStatus::Active,
                 path: TryInto::<AbsolutePath>::try_into(path).map_err(|e| {
                     Errors::UserInput(UserInputError::Validation {
                         name: "config".into(),
@@ -37,18 +37,16 @@ impl AppConfig {
                     })
                 })?,
             }),
-            None => store
-                .get_configuration(None)
-                .map_err(|e| Errors::Configuration {
-                    message: "Failed to get current 'active' config".into(),
-                    source: e.into(),
-                }),
+            None => store.get_template(None).map_err(|e| Errors::Configuration {
+                message: "Failed to get current 'active' config".into(),
+                source: e.into(),
+            }),
         }?;
 
         let git_root_dir = git.root_directory().map_err(Errors::Git)?;
         let config = Self::map_config_overrides(config, git_root_dir)?;
 
-        Ok(AppConfig { config })
+        Ok(AppTemplate { config })
     }
 
     pub fn db_connection() -> anyhow::Result<Connection> {
@@ -75,8 +73,11 @@ impl AppConfig {
             })
     }
 
-    fn map_config_overrides(config: Config, repo_root_dir: AbsolutePath) -> Result<Config, Errors> {
-        let local_config = AppConfig::join_config_filename(&repo_root_dir);
+    fn map_config_overrides(
+        config: Template,
+        repo_root_dir: AbsolutePath,
+    ) -> Result<Template, Errors> {
+        let local_config = AppTemplate::join_config_filename(&repo_root_dir);
 
         match (config.key.clone(), &local_config) {
             // Once off override takes priority 1
@@ -87,7 +88,7 @@ impl AppConfig {
             // Repository has config file priority 2
             (ConfigKey::Local, _) | (_, Ok(_)) => {
                 log::info!("⏳ Loading local repo config...");
-                Ok(Config {
+                Ok(Template {
                     key: ConfigKey::Local,
                     path: local_config?,
                     status: config.status,
@@ -117,7 +118,7 @@ mod tests {
 
     use crate::{
         adapters::GitCommand,
-        domain::{adapters, models::ConfigStatus},
+        domain::{adapters, models::TemplateStatus},
     };
 
     use super::*;
@@ -129,11 +130,11 @@ mod tests {
         let once_path = abs_repo_directory();
         let valid_repo_dir = git.root_directory().unwrap();
 
-        let config = AppConfig::map_config_overrides(
-            Config {
+        let config = AppTemplate::map_config_overrides(
+            Template {
                 key: ConfigKey::Once,
                 path: once_path.clone(),
-                status: ConfigStatus::Active,
+                status: TemplateStatus::Active,
             },
             valid_repo_dir,
         )
@@ -141,7 +142,7 @@ mod tests {
 
         assert_eq!(once_path, config.path);
         assert_eq!(ConfigKey::Once, config.key);
-        assert_eq!(ConfigStatus::Active, config.status);
+        assert_eq!(TemplateStatus::Active, config.status);
     }
 
     #[test]
@@ -155,11 +156,11 @@ mod tests {
 
         for key in [ConfigKey::Default, ConfigKey::User(Faker.fake())] {
             // Act
-            let actual = AppConfig::map_config_overrides(
-                Config {
+            let actual = AppTemplate::map_config_overrides(
+                Template {
                     key,
                     path: valid_file_path(),
-                    status: ConfigStatus::Active,
+                    status: TemplateStatus::Active,
                 },
                 repo_root_with_config.clone().try_into().unwrap(),
             )
@@ -169,7 +170,7 @@ mod tests {
             let path: PathBuf = actual.path.into();
             assert_eq!(config_repo, path);
             assert_eq!(ConfigKey::Local, actual.key);
-            assert_eq!(ConfigStatus::Active, actual.status);
+            assert_eq!(TemplateStatus::Active, actual.status);
         }
 
         std::fs::remove_file(path_buf).unwrap();
@@ -181,11 +182,11 @@ mod tests {
         let repo_non_existing = abs_repo_directory();
         let key = ConfigKey::User(Faker.fake());
 
-        let config = AppConfig::map_config_overrides(
-            Config {
+        let config = AppTemplate::map_config_overrides(
+            Template {
                 key: key.clone(),
                 path: user_path.clone(),
-                status: ConfigStatus::Active,
+                status: TemplateStatus::Active,
             },
             repo_non_existing,
         )
@@ -193,7 +194,7 @@ mod tests {
 
         assert_eq!(key, config.key);
         assert_eq!(user_path, config.path);
-        assert_eq!(ConfigStatus::Active, config.status);
+        assert_eq!(TemplateStatus::Active, config.status);
     }
 
     #[test]
@@ -201,11 +202,11 @@ mod tests {
         let default_path = valid_file_path();
         let repo_non_existing = abs_repo_directory();
 
-        let config = AppConfig::map_config_overrides(
-            Config {
+        let config = AppTemplate::map_config_overrides(
+            Template {
                 key: ConfigKey::Default,
                 path: default_path.clone(),
-                status: ConfigStatus::Active,
+                status: TemplateStatus::Active,
             },
             repo_non_existing,
         )
@@ -213,7 +214,7 @@ mod tests {
 
         assert_eq!(default_path, config.path);
         assert_eq!(ConfigKey::Default, config.key);
-        assert_eq!(ConfigStatus::Active, config.status);
+        assert_eq!(TemplateStatus::Active, config.status);
     }
 
     fn repo_directory() -> PathBuf {

@@ -1,23 +1,23 @@
 use std::fmt;
 
-use crate::domain::models::ConfigStatus;
+use crate::domain::models::TemplateStatus;
 
 use super::{path::AbsolutePath, ConfigKey};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Config {
+pub struct Template {
     pub key: ConfigKey,
     pub path: AbsolutePath,
-    pub status: ConfigStatus,
+    pub status: TemplateStatus,
 }
 
-impl Config {
-    pub fn new(key: ConfigKey, path: AbsolutePath, status: ConfigStatus) -> anyhow::Result<Self> {
-        Ok(Config { key, status, path })
+impl Template {
+    pub fn new(key: ConfigKey, path: AbsolutePath, status: TemplateStatus) -> anyhow::Result<Self> {
+        Ok(Template { key, status, path })
     }
 }
 
-impl fmt::Display for Config {
+impl fmt::Display for Template {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key: String = self.key.clone().into();
 

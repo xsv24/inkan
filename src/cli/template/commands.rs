@@ -7,25 +7,27 @@ use crate::{
             Store,
         },
         errors::{Errors, UserInputError},
-        models::{Config, ConfigKey},
+        models::{ConfigKey, Template},
     },
     entry::Interactive,
 };
 
 #[derive(Debug, Clone, clap::Subcommand)]
-pub enum Arguments {
-    /// Add / register a custom config file.
-    Add(ConfigAdd),
-    /// Switch to another config file.
-    Set(ConfigSet),
+pub enum SubCommands {
+    /// Add / register a custom template file.
+    Add(TemplateAdd),
+    /// Switch to another template.
+    Set(TemplateSet),
     /// List registered template configurations.
     List,
-    /// Reset to the default config.
+    // List active templates.
+    Active,
+    /// Reset to the default template.
     Reset,
 }
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
-pub struct ConfigAdd {
+pub struct TemplateAdd {
     /// Name used to reference the config file.
     pub name: String,
     /// File path to the config file.
@@ -33,12 +35,12 @@ pub struct ConfigAdd {
 }
 
 #[derive(Debug, Args, PartialEq, Eq, Clone)]
-pub struct ConfigSet {
+pub struct TemplateSet {
     /// Name used to reference the config file.
     name: Option<String>,
 }
 
-impl ConfigSet {
+impl TemplateSet {
     pub fn try_into_domain<S: Store, P: Prompter>(
         self,
         store: &S,
@@ -48,7 +50,7 @@ impl ConfigSet {
         Ok(match self.name {
             Some(name) => name.as_str().into(),
             None => prompt_configuration_select(
-                store.get_configurations().map_err(Errors::PersistError)?,
+                store.get_templates().map_err(Errors::PersistError)?,
                 prompt,
                 interactive.to_owned(),
             )
@@ -58,7 +60,7 @@ impl ConfigSet {
 }
 
 fn prompt_configuration_select<P: Prompter>(
-    configurations: Vec<Config>,
+    configurations: Vec<Template>,
     selector: P,
     interactive: Interactive,
 ) -> Result<ConfigKey, UserInputError> {
@@ -94,7 +96,7 @@ mod tests {
         errors::UserInputError,
         models::{
             path::{AbsolutePath, PathType},
-            ConfigStatus,
+            TemplateStatus,
         },
     };
 
@@ -143,11 +145,11 @@ mod tests {
         path.join("templates/default.yml", PathType::File).unwrap()
     }
 
-    fn fake_config() -> Config {
-        Config {
+    fn fake_config() -> Template {
+        Template {
             key: ConfigKey::User(Faker.fake()),
             path: valid_file_path(),
-            status: ConfigStatus::Active,
+            status: TemplateStatus::Active,
         }
     }
 
