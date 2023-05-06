@@ -1,6 +1,6 @@
 use crate::domain::{
     errors::PersistError,
-    models::{Branch, Config, ConfigKey},
+    models::{Branch, ConfigKey, Template},
 };
 
 pub trait Store {
@@ -8,13 +8,13 @@ pub trait Store {
 
     fn get_branch(&self, branch: &str, repo: &str) -> Result<Branch, PersistError>;
 
-    fn persist_config(&self, config: &Config) -> Result<(), PersistError>;
+    fn persist_template(&self, config: &Template) -> Result<(), PersistError>;
 
-    fn set_active_config(&mut self, key: &ConfigKey) -> Result<Config, PersistError>;
+    fn set_active_template(&mut self, key: &ConfigKey) -> Result<Template, PersistError>;
 
-    fn get_configurations(&self) -> Result<Vec<Config>, PersistError>;
+    fn get_templates(&self) -> Result<Vec<Template>, PersistError>;
 
-    fn get_configuration(&self, key: Option<String>) -> Result<Config, PersistError>;
+    fn get_template(&self, key: Option<String>) -> Result<Template, PersistError>;
 
     fn close(self) -> anyhow::Result<()>;
 }

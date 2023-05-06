@@ -3,15 +3,15 @@ use std::path::{Path, PathBuf};
 
 use fake::{Fake, Faker};
 use inkan::{
+    adapters::migrations::{db_migrations, MigrationContext},
     adapters::sqlite::Sqlite,
     app_context::AppContext,
     domain::{
         adapters::{CheckoutStatus, CommitMsgStatus, Git},
         errors::GitError,
-        models::{path::AbsolutePath, Branch, Config, ConfigStatus},
+        models::{path::AbsolutePath, Branch, Template, TemplateStatus},
     },
     entry::Interactive,
-    migrations::{db_migrations, MigrationContext},
 };
 use rusqlite::Connection;
 
@@ -29,15 +29,15 @@ pub fn valid_template_file_path() -> AbsolutePath {
     path.try_into().unwrap()
 }
 
-pub fn fake_config() -> Config {
-    Config {
+pub fn fake_config() -> Template {
+    Template {
         key: Faker.fake::<String>().as_str().into(),
         path: VALID_FILE_PATH.clone(),
-        status: ConfigStatus::Active,
+        status: TemplateStatus::Active,
     }
 }
 
-pub fn fake_context<'a, C: Git>(git: C, config: Config) -> anyhow::Result<AppContext<C, Sqlite>> {
+pub fn fake_context<'a, C: Git>(git: C, config: Template) -> anyhow::Result<AppContext<C, Sqlite>> {
     let mut connection = Connection::open_in_memory()?;
 
     db_migrations(

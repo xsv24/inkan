@@ -4,7 +4,7 @@ use rusqlite::{Connection, Transaction};
 use crate::domain::{
     self,
     errors::PersistError,
-    models::{Branch, Config, ConfigKey, ConfigStatus},
+    models::{Branch, ConfigKey, Template, TemplateStatus},
 };
 
 pub struct Sqlite {
@@ -75,7 +75,7 @@ impl domain::adapters::Store for Sqlite {
         Ok(branch)
     }
 
-    fn persist_config(&self, config: &Config) -> Result<(), PersistError> {
+    fn persist_template(&self, config: &Template) -> Result<(), PersistError> {
         let key: String = config.key.clone().into();
         let path: String = config.path.to_string();
 
@@ -84,20 +84,20 @@ impl domain::adapters::Store for Sqlite {
         self.connection
             .execute(
                 "REPLACE INTO config (key, path, status) VALUES (?1, ?2, ?3)",
-                (key, path, String::from(ConfigStatus::Disabled)),
+                (key, path, String::from(TemplateStatus::Disabled)),
             )
             .map_err(|e| PersistError::into_config_error("Failed to update config.", e))?;
 
         Ok(())
     }
 
-    fn set_active_config(&mut self, key: &ConfigKey) -> Result<Config, PersistError> {
+    fn set_active_template(&mut self, key: &ConfigKey) -> Result<Template, PersistError> {
         let transaction = self.transaction()?;
         let key: String = key.to_owned().into();
 
         let (active, disabled) = (
-            String::from(ConfigStatus::Active),
-            String::from(ConfigStatus::Disabled),
+            String::from(TemplateStatus::Active),
+            String::from(TemplateStatus::Disabled),
         );
 
         // Check the record actually exists before changing statuses.
@@ -137,7 +137,7 @@ impl domain::adapters::Store for Sqlite {
             PersistError::into_config_error("Failed to commit transaction to update config", e)
         })?;
 
-        self.get_configuration(Some(key))
+        self.get_template(Some(key))
             .map_err(|e| PersistError::Validation {
                 name: "config".into(),
                 source: e.into(),
@@ -145,12 +145,12 @@ impl domain::adapters::Store for Sqlite {
     }
 
     // TODO: split this out into separate functions get_config_by_id & get_config_by_status
-    fn get_configuration(&self, key: Option<String>) -> Result<Config, PersistError> {
+    fn get_template(&self, key: Option<String>) -> Result<Template, PersistError> {
         match key {
             Some(key) => self
                 .connection
                 .query_row("SELECT * FROM config WHERE key = ?1", [key], |row| {
-                    Config::try_from(row)
+                    Template::try_from(row)
                 })
                 .map_err(|e| {
                     PersistError::into_config_error("Failed to retrieve config '{key}'.", e)
@@ -159,8 +159,8 @@ impl domain::adapters::Store for Sqlite {
                 .connection
                 .query_row(
                     "SELECT * FROM config WHERE status = ?1",
-                    [String::from(ConfigStatus::Active)],
-                    |row| Config::try_from(row),
+                    [String::from(TemplateStatus::Active)],
+                    |row| Template::try_from(row),
                 )
                 .map_err(|e| {
                     PersistError::into_config_error("Failed to retrieve 'active' config.", e)
@@ -168,14 +168,14 @@ impl domain::adapters::Store for Sqlite {
         }
     }
 
-    fn get_configurations(&self) -> Result<Vec<Config>, PersistError> {
+    fn get_templates(&self) -> Result<Vec<Template>, PersistError> {
         let mut statement = self
             .connection
             .prepare("SELECT * FROM config")
             .map_err(|e| PersistError::into_config_error("Failed to retrieve configs", e))?;
 
         let configs: Vec<_> = statement
-            .query_map([], |row| Config::try_from(row))
+            .query_map([], |row| Template::try_from(row))
             .map_err(|e| PersistError::into_config_error("Failed to retrieve configs", e))?
             .collect::<Result<_, _>>()
             .map_err(|e| PersistError::into_config_error("Failed to retrieve configs", e))?;
@@ -203,7 +203,7 @@ mod tests {
     use crate::entry::Interactive;
     use crate::{app_context::AppContext, domain::adapters::Store};
 
-    use crate::migrations::{db_migrations, MigrationContext};
+    use crate::adapters::migrations::{db_migrations, MigrationContext};
 
     use super::*;
     use anyhow::Context;
@@ -392,8 +392,8 @@ mod tests {
     #[test]
     fn persist_config_creates_a_new_item_if_not_exists() -> anyhow::Result<()> {
         // Arrange
-        let config = Config {
-            status: ConfigStatus::Disabled,
+        let config = Template {
+            status: TemplateStatus::Disabled,
             ..fake_config()
         };
 
@@ -401,7 +401,7 @@ mod tests {
         let store = Sqlite::new(connection);
 
         // Act
-        store.persist_config(&config)?;
+        store.persist_template(&config)?;
 
         // Assert
         assert_eq!(config_count(&store.connection)?, 1);
@@ -423,11 +423,11 @@ mod tests {
         let store = Sqlite::new(connection);
 
         // Act
-        let config = Config {
+        let config = Template {
             key: config.key,
             ..fake_config()
         };
-        store.persist_config(&config)?;
+        store.persist_template(&config)?;
 
         // Assert
         assert_eq!(config_count(&store.connection)?, 1);
@@ -451,7 +451,7 @@ mod tests {
         let store = Sqlite::new(connection);
 
         // Act
-        let configs = store.get_configurations()?;
+        let configs = store.get_templates()?;
 
         assert_eq!(expected, configs);
 
@@ -465,7 +465,7 @@ mod tests {
         let store = Sqlite::new(connection);
 
         // Act
-        let configs = store.get_configurations().unwrap();
+        let configs = store.get_templates().unwrap();
 
         assert!(configs.is_empty());
     }
@@ -481,7 +481,7 @@ mod tests {
 
         // Act
         let config = store
-            .get_configuration(Some(expected.key.clone().into()))
+            .get_template(Some(expected.key.clone().into()))
             .unwrap();
 
         // Assert
@@ -499,7 +499,7 @@ mod tests {
 
         // Act
         let error = store
-            .get_configuration(Some(expected.key.clone().into()))
+            .get_template(Some(expected.key.clone().into()))
             .unwrap_err();
 
         // Assert
@@ -509,8 +509,8 @@ mod tests {
     #[test]
     fn get_config_by_active() -> anyhow::Result<()> {
         // Arrange
-        let expected = Config {
-            status: ConfigStatus::Active,
+        let expected = Template {
+            status: TemplateStatus::Active,
             ..fake_config()
         };
         let connection = setup_db()?;
@@ -518,7 +518,7 @@ mod tests {
         let store = Sqlite::new(connection);
 
         // Act
-        let config = store.get_configuration(None).unwrap();
+        let config = store.get_template(None).unwrap();
 
         // Assert
         assert_eq!(1, config_count(&store.connection)?);
@@ -529,8 +529,8 @@ mod tests {
     #[test]
     fn on_no_active_config_not_found_thrown() {
         // Arrange
-        let expected = Config {
-            status: ConfigStatus::Disabled,
+        let expected = Template {
+            status: TemplateStatus::Disabled,
             ..fake_config()
         };
         let connection = setup_db().unwrap();
@@ -538,7 +538,7 @@ mod tests {
         let store = Sqlite::new(connection);
 
         // Act
-        let error = store.get_configuration(None).unwrap_err();
+        let error = store.get_template(None).unwrap_err();
 
         // Assert
         assert!(matches!(error, PersistError::NotFound { name } if name == "config"));
@@ -552,14 +552,14 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO config (key, path, status) VALUES (?1, ?2, ?3)",
-                (&key, "invalid_path", String::from(ConfigStatus::Active)),
+                (&key, "invalid_path", String::from(TemplateStatus::Active)),
             )
             .unwrap();
 
         let store = Sqlite::new(connection);
 
         // Act
-        let error = store.get_configuration(Some(key)).unwrap_err();
+        let error = store.get_template(Some(key)).unwrap_err();
 
         // Assert
         assert!(matches!(error, PersistError::Corrupted { name, .. } if name == "config"));
@@ -576,24 +576,24 @@ mod tests {
         let store = Sqlite::new(connection);
 
         // Act
-        let error = store.get_configuration(Some(key)).unwrap_err();
+        let error = store.get_template(Some(key)).unwrap_err();
         // Assert
         assert!(matches!(error, PersistError::Corrupted { name, .. } if name == "config"));
     }
 
     #[test]
     fn set_active_config_success() -> anyhow::Result<()> {
-        let mut original = Config {
-            status: ConfigStatus::Disabled,
+        let mut original = Template {
+            status: TemplateStatus::Disabled,
             ..fake_config()
         };
         let connection = setup_db()?;
         insert_config(&connection, &original)?;
 
         let mut store = Sqlite::new(connection);
-        let actual = store.set_active_config(&original.key.clone())?;
+        let actual = store.set_active_template(&original.key.clone())?;
 
-        original.status = ConfigStatus::Active;
+        original.status = TemplateStatus::Active;
         assert_eq!(original, actual);
 
         Ok(())
@@ -604,20 +604,20 @@ mod tests {
         let connection = setup_db().unwrap();
         let mut store = Sqlite::new(connection);
 
-        let active_config = Config {
-            status: ConfigStatus::Active,
+        let active_config = Template {
+            status: TemplateStatus::Active,
             ..fake_config()
         };
 
         insert_config(&store.connection, &active_config).unwrap();
 
         let result = store
-            .set_active_config(&ConfigKey::User(Faker.fake()))
+            .set_active_template(&ConfigKey::User(Faker.fake()))
             .unwrap_err();
         assert!(matches!(result, PersistError::NotFound { name } if name == "config"));
 
         let default = store
-            .get_configuration(Some(active_config.key.clone().into()))
+            .get_template(Some(active_config.key.clone().into()))
             .unwrap();
         assert_eq!(active_config.key, default.key);
     }
@@ -627,16 +627,16 @@ mod tests {
         let connection = setup_db()?;
 
         for _ in 0..(2..10).fake() {
-            let config = Config {
-                status: ConfigStatus::Active,
+            let config = Template {
+                status: TemplateStatus::Active,
                 ..fake_config()
             };
 
             insert_config(&connection, &config)?;
         }
 
-        let original = Config {
-            status: ConfigStatus::Disabled,
+        let original = Template {
+            status: TemplateStatus::Disabled,
             ..fake_config()
         };
 
@@ -644,19 +644,19 @@ mod tests {
 
         let mut store = Sqlite::new(connection);
         // Act
-        store.set_active_config(&original.key)?;
+        store.set_active_template(&original.key)?;
 
         let configs = select_all_config(&store.connection)?;
 
-        let active: Vec<Config> = configs
+        let active: Vec<Template> = configs
             .into_iter()
-            .filter(|c| c.status == ConfigStatus::Active)
+            .filter(|c| c.status == TemplateStatus::Active)
             .collect();
 
         assert_eq!(active.len(), 1);
         let only_active = active.first().unwrap();
-        let expected = Config {
-            status: ConfigStatus::Active,
+        let expected = Template {
+            status: TemplateStatus::Active,
             ..original
         };
         assert_eq!(&expected, only_active);
@@ -676,13 +676,13 @@ mod tests {
         valid_path().to_string()
     }
 
-    fn fake_config() -> Config {
+    fn fake_config() -> Template {
         let absolute_path = valid_path();
 
-        Config {
+        Template {
             key: ConfigKey::User(Faker.fake()),
             path: absolute_path,
-            status: ConfigStatus::Active,
+            status: TemplateStatus::Active,
         }
     }
 
@@ -700,7 +700,7 @@ mod tests {
         ).unwrap();
     }
 
-    fn insert_config(connection: &Connection, config: &Config) -> anyhow::Result<()> {
+    fn insert_config(connection: &Connection, config: &Template) -> anyhow::Result<()> {
         let key: String = config.key.clone().into();
         insert_raw_config(
             connection,
@@ -758,18 +758,18 @@ mod tests {
         })
     }
 
-    fn select_config_row(conn: &Connection, key: String) -> anyhow::Result<Config> {
+    fn select_config_row(conn: &Connection, key: String) -> anyhow::Result<Template> {
         let path = conn.query_row("SELECT * FROM config where key = ?1;", [key], |row| {
-            Config::try_from(row)
+            Template::try_from(row)
         })?;
 
         Ok(path)
     }
 
-    fn select_all_config(conn: &Connection) -> anyhow::Result<Vec<Config>> {
+    fn select_all_config(conn: &Connection) -> anyhow::Result<Vec<Template>> {
         let mut statement = conn.prepare("SELECT * FROM config")?;
         let configs = statement
-            .query_map([], |row| Config::try_from(row))?
+            .query_map([], |row| Template::try_from(row))?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(configs)

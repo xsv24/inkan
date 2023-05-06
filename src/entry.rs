@@ -1,11 +1,11 @@
 use std::fmt::Debug;
 
+use crate::adapters::migrations::{db_migrations, DefaultConfig, MigrationContext};
 use crate::adapters::sqlite::Sqlite;
 use crate::adapters::{Git, GitCommand};
-use crate::app_config::AppConfig;
 use crate::app_context::AppContext;
+use crate::app_template::AppTemplate;
 use crate::cli::{commands::Commands, log::LogLevel};
-use crate::migrations::{db_migrations, DefaultConfig, MigrationContext};
 use anyhow::Ok;
 use clap::{Parser, ValueEnum};
 use directories::ProjectDirs;
@@ -49,7 +49,7 @@ impl Cli {
 
         let git = Git { git: GitCommand };
 
-        let mut connection = AppConfig::db_connection()?;
+        let mut connection = AppTemplate::db_connection()?;
 
         let config_dir = ProjectDirs::from("dev", "xsv24", "inkan")
             .ok_or(anyhow::anyhow!("Failed to load configuration"))?;
@@ -68,7 +68,7 @@ impl Cli {
         )?;
 
         let store = Sqlite::new(connection);
-        let app_config = AppConfig::new(self.config.clone(), &git, &store)?;
+        let app_config = AppTemplate::new(self.config.clone(), &git, &store)?;
         let context = AppContext::new(git, store, app_config.config, self.prompt.clone())?;
 
         Ok(context)
