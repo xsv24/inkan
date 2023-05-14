@@ -1,21 +1,38 @@
-use anyhow::Context;
-use regex::Regex;
-
+use anyhow::Ok;
 use crate::utils::string::OptionStr;
 
 pub trait Templator {
     fn replace_or_remove(&self, target: &str, replace: Option<String>) -> anyhow::Result<String>;
 }
 
-fn brackets_regex(target: &str) -> anyhow::Result<Regex> {
-    // Replace any surrounding brackets without content with an empty string and remove any trailing spaces.
-    // ({target}) | [{target}] | {{target}} | {target}
-    // example: http://regexr.com/75aee
-    let regex = Regex::new(&format!(
-        r"(\(\{{{target}\}}\)\s?)|(\[\{{{target}\}}\]\s?)|(\{{\{{{target}\}}\}}\s?)|(\{{{target}\}}\s?)"
-    ))?;
+fn replace_none(this: &str, target: &str) -> String {
+    log::info!("removing '{}' from template", target);
+    let template = &format!("{{{target}}}");
 
-    Ok(regex)
+    // TODO: Make this more efficient with one round of matching
+    // Strip any prefix or postfix matches to simple template
+    // so rules order are not as important making matches easier.
+    let removed_prefixes_n_postfixes = this
+        .replace(&format!("[{template}]"), template)
+        .replace(&format!("({template})"), template)
+        .replace(&format!("{{{template}}}"), template)
+        // Exceptions to the rule and ordering is important 
+        // to prevent squashing "hi-{target}-bye" => "hibye"
+        .replace(&format!("-{template}-"), "-")
+        .replace(&format!("_{template}_"), "_");
+
+    let remove_separate_joiners = removed_prefixes_n_postfixes 
+        .replace(&format!("-{template}"), template)
+        .replace(&format!("{template}-"), template)
+        .replace(&format!("_{template}"), template)
+        .replace(&format!("{template}_"), template)
+        .replace(&format!("{template} "), template);
+
+    // Finally replace all basic converted templates with empty string
+    remove_separate_joiners
+        .replace(template, "")
+        .trim()
+        .into()
 }
 
 impl Templator for String {
@@ -27,13 +44,7 @@ impl Templator for String {
                 log::info!("replace '{}' from template with '{}'", target, value);
                 self.replace(&template, value)
             }
-            None => {
-                log::info!("removing '{}' from template", target);
-                brackets_regex(target)
-                    .with_context(|| format!("Invalid template for parameter '{target}'."))?
-                    .replace_all(self, "")
-                    .into()
-            }
+            None => replace_none(&self, target),
         };
 
         Ok(message.trim().into())
@@ -46,12 +57,39 @@ mod tests {
 
     #[test]
     fn brackets_match() {
-        let regex = brackets_regex("target").unwrap();
-        assert!(regex.is_match("[{target}]"));
-        assert!(regex.is_match("[{target}] "));
-        assert!(regex.is_match("({target})"));
-        assert!(regex.is_match("({target})\t"));
-        assert!(regex.is_match("{{target}} "));
-        assert!(regex.is_match("{target}"));
+        let templates = [
+            "[{target}]",
+            "[{target}] ",
+            "[{target}]\t",
+            "({target})",
+            "({target}) ",
+            "({target})\t",
+            "{{target}}",
+            "{{target}} ",
+            "{{target}}\t",
+            "[{target}]({target}){{target}}",
+        ];
+
+        for template in templates {
+            assert!(replace_none(template, "target").is_empty())
+        }
+    }
+
+    #[test]
+    fn hanging_connectors_are_removed() {
+        let templates = [
+            ("-{target}-", "-"),
+            ("hi-{target}-bye", "hi-bye"),
+            ("_{target}_", "_"),
+            ("hi_{target}_bye", "hi_bye"),
+            ("-{target}", ""),
+            ("{target}-", ""),
+            ("_{target}", ""),
+            ("{target}_", "")
+        ];
+
+        for (template, expected) in templates {
+            assert_eq!(replace_none(template, "target"), expected);
+        }
     }
 }
