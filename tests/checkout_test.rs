@@ -10,7 +10,7 @@ use inkan::{
         errors::{GitError, PersistError},
         models::Branch,
     },
-    template_config::{CommitConfig, TemplateConfig},
+    template_config::{BranchConfig, CommitConfig, TemplateConfig},
 };
 
 use crate::fakers::{fake_config, fake_context, GitCommandMock};
@@ -60,6 +60,58 @@ fn checkout_success_with_ticket() -> anyhow::Result<()> {
     context.close()?;
 
     Ok(())
+}
+
+#[test]
+fn checkout_uses_branch_template() {
+    let repo = Faker.fake::<String>();
+
+    let command = Checkout {
+        ticket: Some(Faker.fake()),
+        scope: Some(Faker.fake()),
+        ..fake_checkout_args()
+    };
+
+    let git_commands = GitCommandMock {
+        repo: Ok(repo.clone()),
+        branch_name: Ok(command.name.clone()),
+        ..GitCommandMock::fake()
+    };
+
+    let context = fake_context(git_commands.clone(), fake_config()).unwrap();
+
+    let template = TemplateConfig {
+        branch: Some(BranchConfig {
+            content: "{branch_name}-{scope}-{ticket_num}".into(),
+        }),
+        ..fake_template_config()
+    };
+
+    // Act
+    handler(&context.git, &context.store, template, command.clone()).unwrap();
+
+    let branch_name = format!(
+        "{}-{}-{}",
+        &command.name,
+        &command.scope.clone().unwrap(),
+        &command.ticket.clone().unwrap()
+    );
+
+    // Assert
+    let branch = context.store.get_branch(&branch_name, &repo).unwrap();
+
+    let name = format!("{}-{}", &git_commands.repo.unwrap(), branch_name);
+    let expected: Branch = Branch {
+        name,
+        ticket: command.ticket.unwrap(),
+        link: command.link,
+        scope: command.scope,
+        created: branch.created,
+        data: None,
+    };
+
+    assert_eq!(branch, expected);
+    context.close().unwrap();
 }
 
 #[test]
@@ -218,7 +270,6 @@ pub fn fake_checkout_args() -> Checkout {
 pub fn fake_template_config() -> TemplateConfig {
     TemplateConfig {
         version: 1,
-        params: None,
         branch: None,
         commit: CommitConfig {
             templates: HashMap::new(),
