@@ -1,8 +1,22 @@
-use anyhow::Ok;
+use std::collections::HashMap;
+
 use crate::utils::string::OptionStr;
+use anyhow::Ok;
 
 pub trait Templator {
+    fn replace_or_remove_params<S1: Into<String>, S2: Into<String>>(
+        &self,
+        pairs: Option<HashMap<S1, S2>>,
+    ) -> anyhow::Result<String>;
+
+    fn replace_or_remove_pairs<S1: Into<String>, S2: Into<String>>(
+        &self,
+        pairs: HashMap<S1, Option<S2>>,
+    ) -> anyhow::Result<String>;
+
     fn replace_or_remove(&self, target: &str, replace: Option<String>) -> anyhow::Result<String>;
+
+    fn required_replace(&self, target: &str, replace: String) -> anyhow::Result<String>;
 }
 
 fn replace_none(this: &str, target: &str) -> String {
@@ -16,26 +30,68 @@ fn replace_none(this: &str, target: &str) -> String {
         .replace(&format!("[{template}]"), template)
         .replace(&format!("({template})"), template)
         .replace(&format!("{{{template}}}"), template)
-        // Exceptions to the rule and ordering is important 
+        // Exceptions to the rule and ordering is important
         // to prevent squashing "hi-{target}-bye" => "hibye"
         .replace(&format!("-{template}-"), "-")
-        .replace(&format!("_{template}_"), "_");
+        .replace(&format!("_{template}_"), "_")
+        .replace(&format!("/{template}/"), "/");
 
-    let remove_separate_joiners = removed_prefixes_n_postfixes 
+    let remove_separate_joiners = removed_prefixes_n_postfixes
         .replace(&format!("-{template}"), template)
         .replace(&format!("{template}-"), template)
         .replace(&format!("_{template}"), template)
         .replace(&format!("{template}_"), template)
+        .replace(&format!("/{template}"), template)
+        .replace(&format!("{template}/"), template)
         .replace(&format!("{template} "), template);
 
     // Finally replace all basic converted templates with empty string
-    remove_separate_joiners
-        .replace(template, "")
-        .trim()
-        .into()
+    remove_separate_joiners.replace(template, "").trim().into()
 }
 
 impl Templator for String {
+    fn replace_or_remove_params<S1: Into<String>, S2: Into<String>>(
+        &self,
+        pairs: Option<HashMap<S1, S2>>,
+    ) -> anyhow::Result<String> {
+        let mut contents = String::from(self);
+
+        if let Some(pairs) = pairs {
+            for (target, replacement) in pairs {
+                contents = contents.replace_or_remove(
+                    &format!("param.{}", target.into()),
+                    Some(replacement.into()),
+                )?;
+            }
+        }
+
+        let regex = regex::Regex::new(r"\{param\.(.*)\}").unwrap();
+        let matches = regex.captures(&contents).unwrap();
+
+        if let Some(matched) = matches.get(0) {
+            // TODO: Need to add global config 
+            anyhow::bail!(
+                "{} is required for this template, please add it too your global config",
+                matched.as_str()
+            )
+        }
+
+        return Ok(contents.trim().into());
+    }
+
+    fn replace_or_remove_pairs<S1: Into<String>, S2: Into<String>>(
+        &self,
+        pairs: HashMap<S1, Option<S2>>,
+    ) -> anyhow::Result<String> {
+        let mut contents = String::from(self);
+        for (target, replacement) in pairs {
+            let option: Option<String> = replacement.map(|v| v.into());
+            contents = contents.replace_or_remove(&target.into(), option)?;
+        }
+
+        Ok(contents)
+    }
+
     fn replace_or_remove(&self, target: &str, replace: Option<String>) -> anyhow::Result<String> {
         let template = format!("{{{target}}}");
 
@@ -44,10 +100,20 @@ impl Templator for String {
                 log::info!("replace '{}' from template with '{}'", target, value);
                 self.replace(&template, value)
             }
-            None => replace_none(&self, target),
+            None => replace_none(self, target),
         };
 
         Ok(message.trim().into())
+    }
+
+    fn required_replace(&self, target: &str, replace: String) -> anyhow::Result<String> {
+        let template = format!("{{{target}}}");
+
+        if !self.contains(&template) {
+            anyhow::bail!("Failed to find a match for '{}'", target)
+        }
+
+        self.replace_or_remove(target, Some(replace))
     }
 }
 
@@ -85,7 +151,7 @@ mod tests {
             ("-{target}", ""),
             ("{target}-", ""),
             ("_{target}", ""),
-            ("{target}_", "")
+            ("{target}_", ""),
         ];
 
         for (template, expected) in templates {

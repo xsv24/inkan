@@ -1,8 +1,14 @@
-use crate::{domain::{
-    adapters::{CheckoutStatus, Git, Store},
-    errors::Errors,
-    models::Branch, template::Templator,
-}, template_config::TemplateConfig};
+use std::collections::HashMap;
+
+use crate::{
+    domain::{
+        adapters::{CheckoutStatus, Git, Store},
+        errors::Errors,
+        models::Branch,
+        template::Templator,
+    },
+    template_config::TemplateConfig,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Checkout {
@@ -16,19 +22,32 @@ pub struct Checkout {
     pub link: Option<String>,
 }
 
+impl From<Checkout> for HashMap<&str, Option<String>> {
+    fn from(value: Checkout) -> Self {
+        HashMap::from([
+            ("branch_name", Some(value.name)),
+            ("ticket_num", value.ticket),
+            ("scope", value.scope),
+        ])
+    }
+}
+
 fn build_branch_name(args: &Checkout, template: &TemplateConfig) -> anyhow::Result<String> {
     let args = args.clone();
 
-    let mut contents = template.branch.content
-        .replace_or_remove("name", Some(args.name))?
-        .replace_or_remove("ticket_num", args.ticket)?
-        .replace_or_remove("scope", args.scope)?;
+    if template.branch.is_none() {
+        return Ok(args.name);
+    }
 
-    if let Some(params) = &template.params {
-        for (key, value)in params {
-            contents = contents.replace_or_remove(key, Some(value.clone()))?;
-        }
-    } 
+    let branch_template = template
+        .branch
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Expected valid template branch"))?;
+
+    let contents = branch_template
+        .content
+        .replace_or_remove_pairs(args.into())?
+        .replace_or_remove_params(template.params.clone())?;
 
     Ok(contents)
 }
@@ -37,15 +56,13 @@ pub fn handler<G: Git, S: Store>(
     git: &G,
     store: &S,
     template: TemplateConfig,
-    args: Checkout
+    args: Checkout,
 ) -> Result<Branch, Errors> {
     // Build name
-    let name = build_branch_name(&args, &template)
-        .map_err(|e| Errors::ValidationError {
-                message: "Failed to build branch name from the specified config".into(),
-                source: Some(e)
-            }
-    )?;
+    let name = build_branch_name(&args, &template).map_err(|e| Errors::ValidationError {
+        message: "Failed to build branch name from the specified config".into(),
+        source: Some(e),
+    })?;
 
     // Attempt to create branch
     let create = git.checkout(&name, CheckoutStatus::New);
@@ -54,7 +71,7 @@ pub fn handler<G: Git, S: Store>(
     if let Err(err) = create {
         log::error!("failed to create new branch: {}", err);
 
-        git.checkout(&args.name, CheckoutStatus::Existing)
+        git.checkout(&name, CheckoutStatus::Existing)
             .map_err(Errors::Git)?;
     }
 

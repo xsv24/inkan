@@ -10,7 +10,7 @@ pub fn display_error(err: Errors) -> io::Result<()> {
         Errors::Git(inner) => print_error(inner.to_string(), None),
         Errors::PersistError(err) => print_persist_error(err),
         Errors::Configuration { source, .. } => print_error(message, Some(source)),
-        Errors::ValidationError { .. } => print_error(message, None),
+        Errors::ValidationError { source, .. } => print_error(message, source),
     }
 }
 

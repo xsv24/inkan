@@ -14,13 +14,13 @@ use crate::{
 pub struct TemplateConfig {
     pub version: u32,
     pub params: Option<HashMap<String, String>>,
-    pub branch: BranchConfig,
+    pub branch: Option<BranchConfig>,
     pub commit: CommitConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BranchConfig {
-    pub content: String 
+    pub content: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -54,6 +54,7 @@ impl TemplateConfig {
                 source: e.into(),
             }
         })?;
+
         Ok(config)
     }
 
@@ -92,6 +93,9 @@ mod tests {
                     },
                 )]),
             },
+            version: 1,
+            params: None,
+            branch: None,
         };
 
         let template_config = config.get_template_config(&key).unwrap();
@@ -107,6 +111,9 @@ mod tests {
             commit: CommitConfig {
                 templates: HashMap::from([]),
             },
+            version: 1,
+            params: None,
+            branch: None,
         };
 
         let result = config.get_template_config(&key).unwrap_err();

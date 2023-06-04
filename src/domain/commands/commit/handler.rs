@@ -21,7 +21,7 @@ pub fn handler<G: Git>(git: &G, branch: Option<Branch>, commit: Commit) -> Resul
 
     std::fs::write(&template_file, &contents).map_err(|e| Errors::ValidationError {
         message: "Failed attempting to write commit template file".into(),
-        source: Some(anyhow::anyhow!(e))
+        source: Some(anyhow::anyhow!(e)),
     })?;
 
     // Pre-cautionary measure encase 'message' is provided but still matches template exactly.

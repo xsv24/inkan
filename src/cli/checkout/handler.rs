@@ -4,7 +4,8 @@ use crate::{
         adapters::{prompt::Prompter, Git, Store},
         commands::checkout,
         errors::Errors,
-    }, template_config::TemplateConfig,
+    },
+    template_config::TemplateConfig,
 };
 
 use super::Arguments;
@@ -20,7 +21,7 @@ pub fn handler<G: Git, S: Store, P: Prompter>(
 
     let template = TemplateConfig::new(&context.config.path)?;
 
-    checkout::handler(&context.git, &context.store,  template, checkout)?;
+    checkout::handler(&context.git, &context.store, template, checkout)?;
 
     Ok(())
 }
