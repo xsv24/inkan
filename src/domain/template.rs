@@ -4,19 +4,12 @@ use crate::utils::string::OptionStr;
 use anyhow::Ok;
 
 pub trait Templator {
-    fn replace_or_remove_params<S1: Into<String>, S2: Into<String>>(
-        &self,
-        pairs: Option<HashMap<S1, S2>>,
-    ) -> anyhow::Result<String>;
-
     fn replace_or_remove_pairs<S1: Into<String>, S2: Into<String>>(
         &self,
         pairs: HashMap<S1, Option<S2>>,
     ) -> anyhow::Result<String>;
 
     fn replace_or_remove(&self, target: &str, replace: Option<String>) -> anyhow::Result<String>;
-
-    fn required_replace(&self, target: &str, replace: String) -> anyhow::Result<String>;
 }
 
 fn replace_none(this: &str, target: &str) -> String {
@@ -50,35 +43,6 @@ fn replace_none(this: &str, target: &str) -> String {
 }
 
 impl Templator for String {
-    fn replace_or_remove_params<S1: Into<String>, S2: Into<String>>(
-        &self,
-        pairs: Option<HashMap<S1, S2>>,
-    ) -> anyhow::Result<String> {
-        let mut contents = String::from(self);
-
-        if let Some(pairs) = pairs {
-            for (target, replacement) in pairs {
-                contents = contents.replace_or_remove(
-                    &format!("param.{}", target.into()),
-                    Some(replacement.into()),
-                )?;
-            }
-        }
-
-        let regex = regex::Regex::new(r"\{param\.(.*)\}").unwrap();
-        let matches = regex.captures(&contents).unwrap();
-
-        if let Some(matched) = matches.get(0) {
-            // TODO: Need to add global config 
-            anyhow::bail!(
-                "{} is required for this template, please add it too your global config",
-                matched.as_str()
-            )
-        }
-
-        return Ok(contents.trim().into());
-    }
-
     fn replace_or_remove_pairs<S1: Into<String>, S2: Into<String>>(
         &self,
         pairs: HashMap<S1, Option<S2>>,
@@ -104,16 +68,6 @@ impl Templator for String {
         };
 
         Ok(message.trim().into())
-    }
-
-    fn required_replace(&self, target: &str, replace: String) -> anyhow::Result<String> {
-        let template = format!("{{{target}}}");
-
-        if !self.contains(&template) {
-            anyhow::bail!("Failed to find a match for '{}'", target)
-        }
-
-        self.replace_or_remove(target, Some(replace))
     }
 }
 

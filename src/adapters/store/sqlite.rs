@@ -51,6 +51,7 @@ impl domain::adapters::Store for Sqlite {
         Ok(())
     }
 
+    // TODO: Create a branch key type rather than passing two strings
     fn get_branch(&self, branch: &str, repo: &str) -> Result<Branch, PersistError> {
         let name = format!("{}-{}", repo.trim(), branch.trim());
 

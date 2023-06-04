@@ -308,7 +308,6 @@ mod tests {
         TemplateConfig {
             commit: config,
             version: 1,
-            params: None,
             branch: None,
         }
     }

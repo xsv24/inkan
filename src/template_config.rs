@@ -13,7 +13,6 @@ use crate::{
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TemplateConfig {
     pub version: u32,
-    pub params: Option<HashMap<String, String>>,
     pub branch: Option<BranchConfig>,
     pub commit: CommitConfig,
 }
@@ -94,7 +93,6 @@ mod tests {
                 )]),
             },
             version: 1,
-            params: None,
             branch: None,
         };
 
@@ -112,7 +110,6 @@ mod tests {
                 templates: HashMap::from([]),
             },
             version: 1,
-            params: None,
             branch: None,
         };
 
