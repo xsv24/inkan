@@ -1,11 +1,16 @@
 mod fakers;
 
+use std::collections::HashMap;
+
 use fake::{Fake, Faker};
-use inkan::domain::{
-    adapters::{CheckoutStatus, Store},
-    commands::checkout::{handler, Checkout},
-    errors::{GitError, PersistError},
-    models::Branch,
+use inkan::{
+    domain::{
+        adapters::{CheckoutStatus, Store},
+        commands::checkout::{handler, Checkout},
+        errors::{GitError, PersistError},
+        models::Branch,
+    },
+    template_config::{BranchConfig, CommitConfig, TemplateConfig},
 };
 
 use crate::fakers::{fake_config, fake_context, GitCommandMock};
@@ -29,7 +34,12 @@ fn checkout_success_with_ticket() -> anyhow::Result<()> {
     let context = fake_context(git_commands.clone(), fake_config())?;
 
     // Act
-    handler(&context.git, &context.store, command.clone())?;
+    handler(
+        &context.git,
+        &context.store,
+        fake_template_config(),
+        command.clone(),
+    )?;
 
     // Assert
     let branch = context.store.get_branch(&command.name, &repo)?;
@@ -53,6 +63,58 @@ fn checkout_success_with_ticket() -> anyhow::Result<()> {
 }
 
 #[test]
+fn checkout_uses_branch_template() {
+    let repo = Faker.fake::<String>();
+
+    let command = Checkout {
+        ticket: Some(Faker.fake()),
+        scope: Some(Faker.fake()),
+        ..fake_checkout_args()
+    };
+
+    let git_commands = GitCommandMock {
+        repo: Ok(repo.clone()),
+        branch_name: Ok(command.name.clone()),
+        ..GitCommandMock::fake()
+    };
+
+    let context = fake_context(git_commands.clone(), fake_config()).unwrap();
+
+    let template = TemplateConfig {
+        branch: Some(BranchConfig {
+            content: "{branch_name}-{scope}-{ticket_num}".into(),
+        }),
+        ..fake_template_config()
+    };
+
+    // Act
+    handler(&context.git, &context.store, template, command.clone()).unwrap();
+
+    let branch_name = format!(
+        "{}-{}-{}",
+        &command.name,
+        &command.scope.clone().unwrap(),
+        &command.ticket.clone().unwrap()
+    );
+
+    // Assert
+    let branch = context.store.get_branch(&branch_name, &repo).unwrap();
+
+    let name = format!("{}-{}", &git_commands.repo.unwrap(), branch_name);
+    let expected: Branch = Branch {
+        name,
+        ticket: command.ticket.unwrap(),
+        link: command.link,
+        scope: command.scope,
+        created: branch.created,
+        data: None,
+    };
+
+    assert_eq!(branch, expected);
+    context.close().unwrap();
+}
+
+#[test]
 fn checkout_with_branch_already_exists_does_not_error() -> anyhow::Result<()> {
     // Arrange
     let repo = Faker.fake::<String>();
@@ -72,7 +134,12 @@ fn checkout_with_branch_already_exists_does_not_error() -> anyhow::Result<()> {
     let context = fake_context(git_commands.clone(), fake_config())?;
 
     // Act
-    handler(&context.git, &context.store, command.clone())?;
+    handler(
+        &context.git,
+        &context.store,
+        fake_template_config(),
+        command.clone(),
+    )?;
 
     // Assert
     let branch = context.store.get_branch(&command.name, &repo)?;
@@ -119,7 +186,13 @@ fn checkout_on_fail_to_checkout_branch_nothing_is_persisted() {
     let context = fake_context(git_commands.clone(), fake_config()).unwrap();
 
     // Act
-    handler(&context.git, &context.store, command.clone()).unwrap_err();
+    handler(
+        &context.git,
+        &context.store,
+        fake_template_config(),
+        command.clone(),
+    )
+    .unwrap_err();
 
     // Assert
     let error = context
@@ -154,7 +227,12 @@ fn checkout_success_without_ticket_uses_branch_name() -> anyhow::Result<()> {
     let context = fake_context(git_commands.clone(), fake_config())?;
 
     // Act
-    handler(&context.git, &context.store, command.clone())?;
+    handler(
+        &context.git,
+        &context.store,
+        fake_template_config(),
+        command.clone(),
+    )?;
 
     // Assert
     let branch = context.store.get_branch(&command.name, &repo)?;
@@ -186,5 +264,15 @@ pub fn fake_checkout_args() -> Checkout {
         ticket: Some(Faker.fake()),
         link: Some(Faker.fake()),
         scope: Some(Faker.fake()),
+    }
+}
+
+pub fn fake_template_config() -> TemplateConfig {
+    TemplateConfig {
+        version: 1,
+        branch: None,
+        commit: CommitConfig {
+            templates: HashMap::new(),
+        },
     }
 }

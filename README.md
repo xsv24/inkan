@@ -156,6 +156,7 @@ When it's time to [commit](#commit-command) your changes any provided context pa
 Examples:
 ```bash
 inkan checkout my-branch --ticket TICKET-123
+
 inkan checkout my-branch \
   -t TICKET-123 \
   --scope parser \
@@ -166,6 +167,13 @@ Most likely your ticket / issue will only have one branch associated to it. In t
 
 ```bash
 inkan checkout TICKET-123
+```
+
+The checkout command also makes use of a simple customizable template which can be configured within a template config that defaults to the following format.
+
+``` yaml
+branch:
+  content: {branch_name}-{ticket_num}
 ```
 
 ---

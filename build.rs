@@ -9,6 +9,8 @@ use directories::ProjectDirs;
 // Build script to copy over default templates & config into the binary directory.
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-env-changed=BUILD_DISABLED");
+    println!("cargo:rerun-if-changed=templates/default.yml");
+    println!("cargo:rerun-if-changed=templates/conventional.yml");
     // We might want to disable the build as "cross" uses docker images without sudo
     // This is sometimes needed for different distros to create our templates in the file system.
     let build_disabled = env::var("BUILD_DISABLED")

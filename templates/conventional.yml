@@ -1,4 +1,9 @@
 version: 1
+
+branch:
+  content: |
+    {branch_name}-{ticket_num}
+
 commit:
   name: conventional
   templates:

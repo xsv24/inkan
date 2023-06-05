@@ -29,11 +29,12 @@ pub struct Cli {
     config: Option<String>,
 
     /// Log level
-    #[clap(value_enum, short, long, default_value_t=LogLevel::None)]
+    #[clap(short, long, value_enum, default_value_t=LogLevel::None)]
     log: LogLevel,
 
     /// Interactive prompts
-    #[clap(value_enum, short, long, default_value_t=Interactive::Enable)]
+    // TODO: Change this to an enum
+    #[clap(short, long,  value_enum, default_value_t=Interactive::Enable)]
     prompt: Interactive,
 
     /// Commands

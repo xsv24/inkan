@@ -305,7 +305,11 @@ mod tests {
 
         let config = CommitConfig { templates: map };
 
-        TemplateConfig { commit: config }
+        TemplateConfig {
+            commit: config,
+            version: 1,
+            branch: None,
+        }
     }
 
     fn fake_args() -> Arguments {

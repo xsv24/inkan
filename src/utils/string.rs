@@ -21,6 +21,15 @@ impl OptionStr<String> for Option<String> {
     }
 }
 
+impl OptionStr<String> for &Option<String> {
+    fn none_if_empty(self) -> Option<String> {
+        match self {
+            Some(value) => into_option(value),
+            None => None,
+        }
+    }
+}
+
 impl OptionStr<String> for String {
     fn none_if_empty(self) -> Option<String> {
         if self.is_empty() {
