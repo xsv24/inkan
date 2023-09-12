@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-use super::{checkout, commit, config, context, templates};
+use super::{checkout, commit, context, template};
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum Commands {
@@ -18,11 +18,9 @@ pub enum Commands {
     Checkout(checkout::Arguments),
     /// Add or update the ticket number related to the current branch.
     Context(context::Arguments),
-    /// Get or Set persisted configuration file path.
+    /// Get or Set active template.
     #[clap(subcommand)]
-    Config(config::Arguments),
-    /// Display a list of configured templates.
-    Templates,
+    Template(template::SubCommands),
 }
 
 impl Commands {
@@ -35,14 +33,13 @@ impl Commands {
             Commands::Checkout(args) => checkout::handler(context, args, prompt),
             Commands::Context(args) => context::handler(context, args, prompt),
             Commands::Commit(args) => commit::handler(context, args, prompt),
-            Commands::Config(args) => config::handler(
+            Commands::Template(args) => template::handler(
                 &mut context.store,
-                &context.config.key,
+                &context.config,
                 args,
                 prompt,
                 &context.interactive,
             ),
-            Commands::Templates => templates::handler(&context.config),
         }
     }
 }

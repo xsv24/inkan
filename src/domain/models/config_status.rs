@@ -1,25 +1,25 @@
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ConfigStatus {
+pub enum TemplateStatus {
     Active,
     Disabled,
 }
 
-impl From<ConfigStatus> for String {
-    fn from(status: ConfigStatus) -> Self {
+impl From<TemplateStatus> for String {
+    fn from(status: TemplateStatus) -> Self {
         match status {
-            ConfigStatus::Active => "ACTIVE".into(),
-            ConfigStatus::Disabled => "DISABLED".into(),
+            TemplateStatus::Active => "ACTIVE".into(),
+            TemplateStatus::Disabled => "DISABLED".into(),
         }
     }
 }
 
-impl TryInto<ConfigStatus> for String {
+impl TryInto<TemplateStatus> for String {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<ConfigStatus, Self::Error> {
+    fn try_into(self) -> Result<TemplateStatus, Self::Error> {
         match self.as_str() {
-            "ACTIVE" => Ok(ConfigStatus::Active),
-            "DISABLED" => Ok(ConfigStatus::Disabled),
+            "ACTIVE" => Ok(TemplateStatus::Active),
+            "DISABLED" => Ok(TemplateStatus::Disabled),
             value => anyhow::bail!("'{}' is not a valid ConfigStatus", value),
         }
     }

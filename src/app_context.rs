@@ -1,7 +1,7 @@
 use crate::{
     domain::{
         adapters::{Git, Store},
-        models::Config,
+        models::Template,
     },
     entry::Interactive,
 };
@@ -9,7 +9,7 @@ use crate::{
 pub struct AppContext<G: Git, S: Store> {
     pub store: S,
     pub git: G,
-    pub config: Config,
+    pub config: Template,
     pub interactive: Interactive,
 }
 
@@ -17,7 +17,7 @@ impl<G: Git, S: Store> AppContext<G, S> {
     pub fn new(
         git: G,
         store: S,
-        config: Config,
+        config: Template,
         interactive: Interactive,
     ) -> anyhow::Result<AppContext<G, S>> {
         Ok(AppContext {
